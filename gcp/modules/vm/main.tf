@@ -118,7 +118,7 @@ resource "google_compute_instance" "mgmt" {
 
     # Install prerequisites
     apt-get update
-    apt-get install -y apt-transport-https ca-certificates gnupg curl
+    apt-get install -y apt-transport-https ca-certificates gnupg curl mysql-client
 
     # Add Google Cloud SDK repo
     curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
@@ -138,6 +138,14 @@ resource "google_compute_instance" "mgmt" {
 
     # Add user to docker group
     usermod -aG docker ${var.ssh_user}
+
+    # Configure GKE cluster credentials for user
+    sudo -u ${var.ssh_user} bash -c '
+      mkdir -p /home/${var.ssh_user}/.kube
+      export HOME=/home/${var.ssh_user}
+      export USE_GKE_GCLOUD_AUTH_PLUGIN=True
+      gcloud container clusters get-credentials ${var.gke_cluster_name} --region ${var.gke_cluster_region} --project ${var.project_id}
+    '
   EOF
 
   labels = {

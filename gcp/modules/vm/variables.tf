@@ -82,3 +82,15 @@ variable "service_account_email" {
   description = "Service account email for instances"
   type        = string
 }
+
+variable "gke_cluster_name" {
+  description = "GKE cluster name for kubectl configuration"
+  type        = string
+  default     = ""
+}
+
+variable "gke_cluster_region" {
+  description = "GKE cluster region"
+  type        = string
+  default     = ""
+}

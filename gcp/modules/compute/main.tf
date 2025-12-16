@@ -91,6 +91,10 @@ module "vm" {
   ssh_public_key       = var.ssh_public_key
 
   service_account_email = data.google_service_account.gke_cluster_sa.email
+
+  # GKE cluster info for auto-configuration
+  gke_cluster_name   = var.gke_cluster_name
+  gke_cluster_region = var.region
 }
 
 data "google_service_account" "gke_cluster_sa" {
