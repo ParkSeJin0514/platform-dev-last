@@ -70,3 +70,30 @@ resource "google_secret_manager_secret_iam_member" "dr_config_accessor" {
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${module.gke.external_secrets_sa_email}"
 }
+
+# ============================================================================
+# VM 모듈 호출 (Bastion, Management)
+# ============================================================================
+module "vm" {
+  source = "../vm"
+
+  project_id   = var.project_id
+  project_name = var.project_name
+  region       = var.region
+  zone         = var.zone
+
+  network_id        = var.vpc_id
+  public_subnet_id  = var.public_subnet_id
+  private_subnet_id = var.private_subnet_id
+
+  bastion_machine_type = var.bastion_machine_type
+  mgmt_machine_type    = var.mgmt_machine_type
+  ssh_public_key       = var.ssh_public_key
+
+  service_account_email = data.google_service_account.gke_cluster_sa.email
+}
+
+data "google_service_account" "gke_cluster_sa" {
+  account_id = "gke-cluster-sa"
+  project    = var.project_id
+}

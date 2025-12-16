@@ -56,3 +56,23 @@ output "nat_name" {
   description = "Cloud NAT name"
   value       = google_compute_router_nat.nat.name
 }
+
+output "public_subnet_id" {
+  description = "Public subnet ID"
+  value       = google_compute_subnetwork.public.id
+}
+
+output "public_subnet_name" {
+  description = "Public subnet name"
+  value       = google_compute_subnetwork.public.name
+}
+
+output "private_subnet_id" {
+  description = "Private subnet ID"
+  value       = google_compute_subnetwork.private.id
+}
+
+output "private_subnet_name" {
+  description = "Private subnet name"
+  value       = google_compute_subnetwork.private.name
+}

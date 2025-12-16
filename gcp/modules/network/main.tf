@@ -15,6 +15,32 @@ resource "google_compute_network" "vpc" {
 }
 
 # ============================================================================
+# Public Subnet (Bastion)
+# ============================================================================
+resource "google_compute_subnetwork" "public" {
+  name          = "${var.project_name}-public-subnet"
+  ip_cidr_range = cidrsubnet(var.vpc_cidr, 8, 1)  # 10.1.1.0/24
+  region        = var.region
+  network       = google_compute_network.vpc.id
+  description   = "Public subnet for Bastion"
+
+  private_ip_google_access = true
+}
+
+# ============================================================================
+# Private Subnet (Management)
+# ============================================================================
+resource "google_compute_subnetwork" "private" {
+  name          = "${var.project_name}-private-subnet"
+  ip_cidr_range = cidrsubnet(var.vpc_cidr, 8, 2)  # 10.1.2.0/24
+  region        = var.region
+  network       = google_compute_network.vpc.id
+  description   = "Private subnet for Management server"
+
+  private_ip_google_access = true
+}
+
+# ============================================================================
 # GKE Subnet (Pod, Service Secondary Range 포함)
 # ============================================================================
 resource "google_compute_subnetwork" "gke" {

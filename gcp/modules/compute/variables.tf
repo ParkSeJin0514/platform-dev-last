@@ -91,3 +91,38 @@ variable "external_secrets_sa_name" {
   type        = string
   default     = "petclinic-dr-external-secrets"
 }
+
+# ============================================================================
+# VM 설정
+# ============================================================================
+variable "zone" {
+  description = "GCP zone for VMs"
+  type        = string
+}
+
+variable "public_subnet_id" {
+  description = "Public subnet ID for Bastion"
+  type        = string
+}
+
+variable "private_subnet_id" {
+  description = "Private subnet ID for Management server"
+  type        = string
+}
+
+variable "bastion_machine_type" {
+  description = "Machine type for Bastion"
+  type        = string
+  default     = "e2-micro"
+}
+
+variable "mgmt_machine_type" {
+  description = "Machine type for Management server"
+  type        = string
+  default     = "e2-small"
+}
+
+variable "ssh_public_key" {
+  description = "SSH public key for VMs"
+  type        = string
+}

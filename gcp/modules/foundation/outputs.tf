@@ -76,3 +76,14 @@ output "nat_name" {
   description = "Cloud NAT name"
   value       = module.network.nat_name
 }
+
+# Public/Private Subnet 정보
+output "public_subnet_id" {
+  description = "Public subnet ID"
+  value       = module.network.public_subnet_id
+}
+
+output "private_subnet_id" {
+  description = "Private subnet ID"
+  value       = module.network.private_subnet_id
+}

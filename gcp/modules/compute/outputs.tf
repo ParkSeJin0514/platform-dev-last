@@ -57,3 +57,41 @@ output "dr_config_secret_id" {
   description = "DR config secret ID"
   value       = google_secret_manager_secret.dr_config.secret_id
 }
+
+# ============================================================================
+# VM 정보
+# ============================================================================
+output "bastion_name" {
+  description = "Bastion instance name"
+  value       = module.vm.bastion_name
+}
+
+output "bastion_public_ip" {
+  description = "Bastion public IP address"
+  value       = module.vm.bastion_public_ip
+}
+
+output "bastion_private_ip" {
+  description = "Bastion private IP address"
+  value       = module.vm.bastion_private_ip
+}
+
+output "mgmt_name" {
+  description = "Management server instance name"
+  value       = module.vm.mgmt_name
+}
+
+output "mgmt_private_ip" {
+  description = "Management server private IP address"
+  value       = module.vm.mgmt_private_ip
+}
+
+output "bastion_ssh_command" {
+  description = "SSH command to connect to Bastion"
+  value       = module.vm.bastion_ssh_command
+}
+
+output "mgmt_ssh_command" {
+  description = "SSH command to connect to Management server via Bastion"
+  value       = module.vm.mgmt_ssh_command
+}

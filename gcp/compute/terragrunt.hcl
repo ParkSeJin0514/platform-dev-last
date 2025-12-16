@@ -34,6 +34,8 @@ dependency "foundation" {
     gke_subnet_name               = "mock-subnet"
     pods_secondary_range_name     = "pods"
     services_secondary_range_name = "services"
+    public_subnet_id              = "projects/mock/regions/asia-northeast3/subnetworks/mock-public"
+    private_subnet_id             = "projects/mock/regions/asia-northeast3/subnetworks/mock-private"
   }
   mock_outputs_allowed_terraform_commands = ["plan", "validate"]
 }
@@ -61,4 +63,12 @@ inputs = {
 
   # Workload Identity 설정
   external_secrets_sa_name = local.env.locals.external_secrets_sa_name
+
+  # VM 설정
+  zone              = local.env.locals.zone
+  public_subnet_id  = dependency.foundation.outputs.public_subnet_id
+  private_subnet_id = dependency.foundation.outputs.private_subnet_id
+  bastion_machine_type = local.env.locals.bastion_machine_type
+  mgmt_machine_type    = local.env.locals.mgmt_machine_type
+  ssh_public_key       = local.env.locals.ssh_public_key
 }
