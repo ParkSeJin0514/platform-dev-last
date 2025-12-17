@@ -157,6 +157,58 @@ cd ../bootstrap && terragrunt apply
 - **Database**: 각 클라우드 별도 DB (Cloud SQL)
 - **Failover**: Manual (ArgoCD를 통한 GitOps)
 
+## 🧹 AWS Terraform Destroy - ALB/Target Group 정리
+
+Terraform destroy 실행 시 Kubernetes에서 생성한 ALB/Target Group이 남아있으면 삭제가 실패할 수 있습니다.
+이를 해결하기 위해 **Pre-Cleanup** 단계에서 자동으로 정리합니다.
+
+### 자동 정리 대상
+
+| 리소스 | 정리 방법 |
+|--------|----------|
+| **Karpenter** | NodeClaim, NodePool, EC2NodeClass Finalizer 제거 후 삭제 |
+| **ArgoCD Applications** | Finalizer 제거 후 강제 삭제 |
+| **Ingress** | 모든 네임스페이스의 Ingress 삭제 |
+| **LoadBalancer Service** | LoadBalancer 타입 Service 삭제 |
+| **ALB** | `petclinic`, `k8s`, `argocd` 이름 포함 ALB 강제 삭제 |
+| **Target Group** | 고아 Target Group 삭제 |
+
+### 처리 흐름
+
+```
+1. Karpenter 리소스 정리
+       ↓
+2. ArgoCD Applications 정리
+       ↓
+3. Ingress & LoadBalancer Service 삭제
+       ↓
+4. ALB 강제 삭제 (Listener 먼저 삭제)
+       ↓
+5. 30초 대기 (ALB 삭제 완료 대기)
+       ↓
+6. 고아 Target Group 삭제
+       ↓
+7. ALB 삭제 완료 확인 (최대 5분 대기)
+       ↓
+8. Terraform Destroy 실행
+```
+
+### 수동 정리 (필요시)
+
+```bash
+# ALB 목록 확인
+aws elbv2 describe-load-balancers --query 'LoadBalancers[*].[LoadBalancerName,LoadBalancerArn]' --output table
+
+# Target Group 목록 확인
+aws elbv2 describe-target-groups --query 'TargetGroups[*].[TargetGroupName,TargetGroupArn]' --output table
+
+# ALB 강제 삭제
+aws elbv2 delete-load-balancer --load-balancer-arn <ALB_ARN>
+
+# Target Group 삭제
+aws elbv2 delete-target-group --target-group-arn <TG_ARN>
+```
+
 ## 🖥️ VM 접속 (SSH)
 
 ```bash
