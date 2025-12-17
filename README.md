@@ -205,7 +205,18 @@ Layer: all
 
 ## 🔀 PR 기반 Terraform 워크플로우
 
-`.tf` 파일 변경 시 **PR 리뷰**를 통해 승인하는 워크플로우입니다.
+`.tf` 또는 `.hcl` 파일 변경 시 **PR 리뷰**를 통해 승인하는 워크플로우입니다.
+
+### 트리거 조건
+
+| 파일 패턴 | 트리거 |
+|-----------|--------|
+| `aws/**/*.tf` | AWS Plan 실행 |
+| `aws/**/*.hcl` | AWS Plan 실행 |
+| `gcp/**/*.tf` | GCP Plan 실행 |
+| `gcp/**/*.hcl` | GCP Plan 실행 |
+
+> **참고**: README.md 등 다른 파일만 변경 시에는 워크플로우가 트리거되지 않습니다.
 
 ### 워크플로우 흐름
 
@@ -278,6 +289,23 @@ GCP: ⏭️ Skipped
 실행자: developer-name
 Commit: abc1234
 [상세 로그 보기] 버튼
+```
+
+### 테스트 방법
+
+```bash
+# 1. feature 브랜치 생성
+git checkout -b feature/test-pr
+
+# 2. .tf 또는 .hcl 파일 수정 (주석 추가 등)
+echo "# Test comment" >> gcp/foundation/terragrunt.hcl
+
+# 3. 커밋 & 푸시
+git add . && git commit -m "test: PR workflow test"
+git push -u origin feature/test-pr
+
+# 4. GitHub에서 PR 생성 → 자동으로 Plan 실행
+# 5. PR Merge → 자동으로 Apply 실행
 ```
 
 ## 🛡️ ALB Security Group 자동화
