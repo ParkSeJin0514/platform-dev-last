@@ -185,3 +185,47 @@ resource "aws_security_group_rule" "cluster_ingress_mgmt_https" {
   security_group_id        = aws_security_group.cluster.id
   source_security_group_id = var.mgmt_security_group_id
 }
+
+# ============================================================================
+# 4. ALB → Node Traffic Rules
+# ============================================================================
+# AWS ALB Ingress Controller가 생성하는 ALB에서 Worker Node로의 트래픽 허용
+# ALB는 VPC 내부 IP를 사용하므로 VPC CIDR 기반으로 허용
+# ============================================================================
+
+# -------------------------------------------------------------------------
+# VPC CIDR → Node (All Ports)
+# -------------------------------------------------------------------------
+# ALB가 VPC 내부에서 생성되므로 VPC CIDR에서 오는 트래픽 허용
+# - ALB → Pod 트래픽 (NodePort: 30000-32767)
+# - ALB → Pod 트래픽 (IP Mode: 직접 Pod IP로 전달)
+# - Health Check 트래픽
+# -------------------------------------------------------------------------
+resource "aws_security_group_rule" "node_ingress_alb" {
+  count = var.vpc_cidr != null ? 1 : 0
+
+  description       = "Allow ALB traffic from VPC CIDR to worker nodes"
+  type              = "ingress"
+  from_port         = 0
+  to_port           = 65535
+  protocol          = "tcp"
+  cidr_blocks       = [var.vpc_cidr]
+  security_group_id = aws_security_group.node.id
+}
+
+# -------------------------------------------------------------------------
+# VPC CIDR → Cluster SG (ALB Health Check)
+# -------------------------------------------------------------------------
+# ALB Controller가 EKS Managed SG도 사용할 수 있으므로 Cluster SG에도 허용
+# -------------------------------------------------------------------------
+resource "aws_security_group_rule" "cluster_ingress_alb" {
+  count = var.vpc_cidr != null ? 1 : 0
+
+  description       = "Allow ALB traffic from VPC CIDR to cluster"
+  type              = "ingress"
+  from_port         = 0
+  to_port           = 65535
+  protocol          = "tcp"
+  cidr_blocks       = [var.vpc_cidr]
+  security_group_id = aws_security_group.cluster.id
+}

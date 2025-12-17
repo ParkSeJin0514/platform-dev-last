@@ -42,6 +42,9 @@ env:
   GCP_REGION: asia-northeast3
   GCP_WORKLOAD_IDENTITY_PROVIDER: projects/605820610222/locations/global/workloadIdentityPools/github-pool/providers/github-provider
 
+  # Slack
+  SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
 # 동시에 하나만 실행 (클라우드별로 분리)
 concurrency:
   group: terraform-apply-${{ github.event.inputs.cloud }}
@@ -195,3 +198,137 @@ jobs:
           echo "=============================================="
           echo "Cloud: ${{ github.event.inputs.cloud }}"
           echo "Layer: ${{ github.event.inputs.layer }}"
+
+  # ============================================
+  # Slack 알림 - 시작
+  # ============================================
+  notify-start:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Slack Notification - Start
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "🚀 Terraform Apply 시작",
+                    "emoji": true
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Cloud:*\n${{ github.event.inputs.cloud }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Layer:*\n${{ github.event.inputs.layer }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*실행자:*\n${{ github.actor }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Repository:*\n${{ github.repository }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "워크플로우 보기",
+                        "emoji": true
+                      },
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+
+  # ============================================
+  # Slack 알림 - 완료
+  # ============================================
+  notify-complete:
+    needs: [apply]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Slack Notification - Complete
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "${{ needs.apply.result == 'success' && '✅ Terraform Apply 성공' || '❌ Terraform Apply 실패' }}",
+                    "emoji": true
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Cloud:*\n${{ github.event.inputs.cloud }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Layer:*\n${{ github.event.inputs.layer }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*결과:*\n${{ needs.apply.result }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*실행자:*\n${{ github.actor }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "상세 로그 보기",
+                        "emoji": true
+                      },
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK

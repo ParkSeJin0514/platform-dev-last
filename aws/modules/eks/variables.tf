@@ -186,3 +186,12 @@ variable "mgmt_security_group_id" {
   type        = string
   default     = null
 }
+
+# ===================================
+# VPC CIDR for ALB Traffic
+# ===================================
+variable "vpc_cidr" {
+  description = "VPC CIDR block to allow ALB traffic to nodes"
+  type        = string
+  default     = null
+}

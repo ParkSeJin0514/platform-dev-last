@@ -105,6 +105,9 @@ module "eks" {
   enable_mgmt_sg_rule    = true
   mgmt_security_group_id = module.ec2.mgmt_security_group_id
 
+  # ALB → Node 트래픽 허용 (VPC CIDR 기반)
+  vpc_cidr = var.vpc_cidr
+
   # 노드 레이블 & Taint
   node_labels = merge(
     {

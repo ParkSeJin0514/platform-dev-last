@@ -49,6 +49,9 @@ env:
   GCP_CLUSTER_NAME: petclinic-dr-gke
   GCP_WORKLOAD_IDENTITY_PROVIDER: projects/605820610222/locations/global/workloadIdentityPools/github-pool/providers/github-provider
 
+  # Slack
+  SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
 permissions:
   id-token: write
   contents: read
@@ -407,3 +410,146 @@ jobs:
           echo "=============================================="
           echo "Cloud: ${{ github.event.inputs.cloud }}"
           echo "Layer: ${{ github.event.inputs.layer }}"
+
+  # ============================================
+  # Slack 알림 - 시작
+  # ============================================
+  notify-start:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Slack Notification - Start
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "🗑️ Terraform Destroy 시작",
+                    "emoji": true
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Cloud:*\n${{ github.event.inputs.cloud }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Layer:*\n${{ github.event.inputs.layer }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*실행자:*\n${{ github.actor }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*확인:*\n${{ github.event.inputs.confirm }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "context",
+                  "elements": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "⚠️ 인프라 삭제가 시작되었습니다!"
+                    }
+                  ]
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "워크플로우 보기",
+                        "emoji": true
+                      },
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+
+  # ============================================
+  # Slack 알림 - 완료
+  # ============================================
+  notify-complete:
+    needs: [destroy]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Slack Notification - Complete
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "${{ needs.destroy.result == 'success' && '✅ Terraform Destroy 성공' || '❌ Terraform Destroy 실패' }}",
+                    "emoji": true
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Cloud:*\n${{ github.event.inputs.cloud }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Layer:*\n${{ github.event.inputs.layer }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*결과:*\n${{ needs.destroy.result }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*실행자:*\n${{ github.actor }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "상세 로그 보기",
+                        "emoji": true
+                      },
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
