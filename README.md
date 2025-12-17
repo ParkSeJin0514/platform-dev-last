@@ -58,8 +58,7 @@ platform-dev-test/
 └── .github/workflows/
     ├── terraform-apply.yml      # Multi-Cloud Apply (수동)
     ├── terraform-destroy.yml    # Multi-Cloud Destroy (수동 + 승인)
-    ├── terraform-pr.yml         # PR 생성 시 Plan 실행
-    └── terraform-merge.yml      # PR Merge 시 Apply 실행
+    └── terraform-pr.yml         # PR 생성 시 Plan 실행
 ```
 
 ## 📋 사전 요구사항
@@ -116,7 +115,6 @@ Terraform Apply/Destroy 실행 시 자동으로 Slack 알림이 발송됩니다.
 | **Terraform Apply (수동)** | workflow_dispatch | 🚀 Apply 시작 | ✅ 성공 / ❌ 실패 | 없음 |
 | **Terraform Destroy** | workflow_dispatch | 🚨 승인 요청 | ✅ 성공 / ❌ 실패 | GitHub Environment |
 | **Terraform Plan (PR)** | PR 생성/업데이트 | - | 🔍 Plan 완료 | - |
-| **Terraform Apply (Merge)** | PR Merge | 🚀 Apply 시작 | ✅ 성공 / ❌ 실패 | PR Review |
 
 ### 설정 방법
 
@@ -203,9 +201,9 @@ Layer: all
 [승인하러 가기] 버튼 (빨간색)
 ```
 
-## 🔀 PR 기반 Terraform 워크플로우
+## 🔀 PR 기반 Terraform Plan 워크플로우
 
-`.tf` 또는 `.hcl` 파일 변경 시 **PR 리뷰**를 통해 승인하는 워크플로우입니다.
+`.tf` 또는 `.hcl` 파일 변경 시 **PR에서 Plan 결과를 미리 확인**하는 워크플로우입니다.
 
 ### 트리거 조건
 
@@ -237,34 +235,13 @@ feature 브랜치에서 .tf 파일 수정
 │ 4. PR 코멘트로 Plan 결과 표시       │
 │    └── 어떤 리소스가 변경되는지 확인 │
 ├─────────────────────────────────────┤
-│ 5. 👀 코드 리뷰 + Approve           │
+│ 5. 👀 코드 리뷰 + Approve + Merge   │
 │    └── 팀장이 코드와 Plan 결과 검토  │
 ├─────────────────────────────────────┤
-│ 6. 🔀 PR Merge                      │
-│    └── terraform-merge.yml 자동 실행│
-├─────────────────────────────────────┤
-│ 7. Terraform Apply 실행             │
-│    └── 변경된 클라우드만 자동 Apply  │
-├─────────────────────────────────────┤
-│ 8. 🔔 Slack 알림 - 완료             │
-│    └── 성공/실패 알림 전송           │
+│ 6. 🚀 수동 Apply 실행               │
+│    └── terraform-apply.yml 수동 실행│
 └─────────────────────────────────────┘
 ```
-
-### GitHub Branch Protection 설정 (필수)
-
-1. Repository → Settings → Branches
-2. **Add branch protection rule** 클릭
-3. Branch name pattern: `main`
-4. 다음 옵션 체크:
-   - ✅ **Require a pull request before merging**
-     - ✅ Require approvals: 1
-     - ✅ Dismiss stale pull request approvals when new commits are pushed
-   - ✅ **Require status checks to pass before merging**
-     - `terraform-plan-aws` (선택사항)
-     - `terraform-plan-gcp` (선택사항)
-   - ✅ **Do not allow bypassing the above settings**
-5. **Create** 클릭
 
 ### PR Plan 완료 알림 예시
 
@@ -277,18 +254,6 @@ AWS Plan: ✅ Success
 GCP Plan: ⏭️ Skipped
 Title: VPC CIDR 변경
 [PR 리뷰하러 가기] 버튼
-```
-
-### PR Merge 후 Apply 완료 알림 예시
-
-```
-✅ Terraform Apply 성공 (PR Merge)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-AWS: ✅ Success
-GCP: ⏭️ Skipped
-실행자: developer-name
-Commit: abc1234
-[상세 로그 보기] 버튼
 ```
 
 ### 테스트 방법
@@ -305,7 +270,7 @@ git add . && git commit -m "test: PR workflow test"
 git push -u origin feature/test-pr
 
 # 4. GitHub에서 PR 생성 → 자동으로 Plan 실행
-# 5. PR Merge → 자동으로 Apply 실행
+# 5. PR Merge 후 → terraform-apply.yml 수동 실행
 ```
 
 ## 🛡️ ALB Security Group 자동화
