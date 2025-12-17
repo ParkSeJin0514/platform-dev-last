@@ -493,3 +493,4 @@ gcloud projects add-iam-policy-binding PROJECT_ID \
 | **platform-gitops-test** | GitOps 매니페스트 (aws/, gcp/ 폴더 구조) |
 | **petclinic-gitops** | PetClinic 애플리케이션 매니페스트 |
 | **petclinic-dev** | PetClinic 소스 코드 + CI/CD |
+# test
