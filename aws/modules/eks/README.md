@@ -11,6 +11,7 @@ EKS 클러스터와 Managed Node Group을 생성합니다.
 | Launch Template | 1 | Worker Node 설정 (Ubuntu 24.04) |
 | Security Group | 2 | Cluster SG, Node SG |
 | IAM Role | 2 | Cluster Role, Node Role |
+| VPC CNI Add-on | 1 | Pod 네트워킹 (Secondary IP 모드) |
 
 ---
 
@@ -20,6 +21,50 @@ EKS 클러스터와 Managed Node Group을 생성합니다.
 - **IMDSv2 강제**: SSRF 공격 방지
 - **EBS 암호화**: 볼륨 자동 암호화
 - **롤링 업데이트**: max_unavailable_percentage 설정
+- **VPC CNI Add-on**: Secondary IP 모드로 Pod 네트워킹 관리
+
+---
+
+## 🌐 VPC CNI 네트워킹
+
+### Secondary IP 모드 (기본값)
+
+| 항목 | 값 |
+|------|-----|
+| Pod IP 할당 방식 | ENI에 Secondary IP 할당 |
+| 노드당 최대 Pod 수 | 인스턴스 타입에 따라 결정 |
+| 서브넷 권장 크기 | /24 이상 |
+
+**인스턴스별 최대 Pod 수 (Secondary IP 모드)**
+
+| 인스턴스 타입 | ENI 수 | ENI당 IP | 최대 Pod |
+|---------------|--------|----------|----------|
+| t3.medium | 3 | 6 | 17 |
+| t3.large | 3 | 12 | 35 |
+| t3.xlarge | 4 | 15 | 58 |
+| t3.2xlarge | 4 | 15 | 58 |
+
+### Prefix Delegation 모드 (대형 서브넷용)
+
+> **주의**: /20 이상의 대형 서브넷에서만 권장
+
+Prefix Delegation을 활성화하려면:
+
+```hcl
+# EKS Add-on 설정 수정 필요
+configuration_values = jsonencode({
+  env = {
+    ENABLE_PREFIX_DELEGATION = "true"
+    WARM_PREFIX_TARGET       = "1"
+  }
+})
+```
+
+| 항목 | 값 |
+|------|-----|
+| Pod IP 할당 방식 | /28 prefix (16 IP) 단위 할당 |
+| 노드당 최대 Pod 수 | 110개 |
+| 서브넷 권장 크기 | /20 이상 (4,096 IP) |
 
 ---
 
@@ -59,7 +104,17 @@ module "eks" {
   enable_mgmt_sg_rule    = true
   mgmt_security_group_id = module.ec2.mgmt_security_group_id
 
-  kubelet_extra_args = "--max-pods=110"
+}
+```
+
+### VPC CNI 버전 지정
+
+```hcl
+module "eks" {
+  source = "./modules/eks"
+  # ... 기타 설정 ...
+
+  vpc_cni_version = "v1.19.2-eksbuild.5"  # 선택사항, 기본값 있음
 }
 ```
 
