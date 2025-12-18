@@ -25,7 +25,7 @@ AWS Primary + GCP DR 환경을 위한 Terraform/Terragrunt IaC 코드
 ## 📁 디렉토리 구조
 
 ```
-platform-dev-test/
+platform-dev-last/
 ├── aws/                          # AWS Infrastructure
 │   ├── terragrunt.hcl           # Root Terragrunt (S3 Backend)
 │   ├── env.hcl                  # AWS 환경 변수
@@ -100,7 +100,7 @@ gcloud iam service-accounts create "github-actions" \
 gcloud iam service-accounts add-iam-policy-binding \
   "github-actions@kdt2-final-project-t1.iam.gserviceaccount.com" \
   --role="roles/iam.workloadIdentityUser" \
-  --member="principalSet://iam.googleapis.com/projects/605820610222/locations/global/workloadIdentityPools/github-actions-pool/attribute.repository/YOUR_ORG/platform-dev-test" \
+  --member="principalSet://iam.googleapis.com/projects/605820610222/locations/global/workloadIdentityPools/github-actions-pool/attribute.repository/YOUR_ORG/platform-dev-last" \
   --project="kdt2-final-project-t1"
 ```
 
@@ -483,6 +483,6 @@ gcloud projects add-iam-policy-binding PROJECT_ID \
 
 | 저장소 | 설명 |
 |--------|------|
-| **platform-gitops-test** | GitOps 매니페스트 (aws/, gcp/ 폴더 구조) |
+| **platform-gitops-last** | GitOps 매니페스트 (aws/, gcp/ 폴더 구조) |
 | **petclinic-gitops** | PetClinic 애플리케이션 매니페스트 |
 | **petclinic-dev** | PetClinic 소스 코드 + CI/CD |
