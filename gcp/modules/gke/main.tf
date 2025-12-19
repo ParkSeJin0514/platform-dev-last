@@ -40,11 +40,11 @@ resource "google_container_cluster" "standard" {
     services_secondary_range_name = var.services_range_name
   }
 
-  # Private Cluster 설정
+  # Public Cluster 설정 (Private 노드 비활성화)
+  # Note: Compute Engine 기본 SA 삭제로 인해 Private Cluster 생성 불가
   private_cluster_config {
-    enable_private_nodes    = var.enable_private_nodes
-    enable_private_endpoint = var.enable_private_endpoint
-    master_ipv4_cidr_block  = var.master_ipv4_cidr
+    enable_private_nodes    = false
+    enable_private_endpoint = false
   }
 
   # Master Authorized Networks

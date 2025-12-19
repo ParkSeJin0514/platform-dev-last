@@ -581,11 +581,14 @@ ssh gcp-mgmt
 kubectl get pods -A
 ```
 
-### GKE Standard
+### GKE Standard (Public Cluster)
 - Node Pool 기반 노드 관리
 - 노드 단위 과금 (e2-medium 기본)
 - Cluster Autoscaler로 자동 스케일링 (min: 1, max: 3)
 - DR 환경에서 빠른 Failover를 위해 노드 상시 대기
+- **Public Cluster 모드**: `enable_private_nodes = false`
+  - 노드에 공개 IP 할당 (방화벽으로 보안 제어)
+  - Private Cluster는 Compute Engine 기본 SA 필요 (삭제된 상태)
 
 ### Cloud SQL Private Access
 - Private Service Connection 사용
