@@ -59,7 +59,7 @@ variable "enable_private_endpoint" {
 variable "master_ipv4_cidr" {
   description = "CIDR block for master private endpoint"
   type        = string
-  default     = "172.16.0.0/28"
+  default     = "172.17.0.0/28"
 }
 
 variable "master_authorized_cidr" {
@@ -78,4 +78,78 @@ variable "external_secrets_sa_name" {
   description = "Service account name for External Secrets Operator"
   type        = string
   default     = "petclinic-dr-external-secrets"
+}
+
+# ============================================================================
+# Node Pool 설정
+# ============================================================================
+
+variable "node_count" {
+  description = "Initial number of nodes per zone"
+  type        = number
+  default     = 1
+}
+
+variable "node_min_count" {
+  description = "Minimum number of nodes per zone for autoscaling"
+  type        = number
+  default     = 1
+}
+
+variable "node_max_count" {
+  description = "Maximum number of nodes per zone for autoscaling"
+  type        = number
+  default     = 3
+}
+
+variable "node_machine_type" {
+  description = "Machine type for nodes"
+  type        = string
+  default     = "e2-medium"
+}
+
+variable "node_disk_size" {
+  description = "Disk size in GB for nodes"
+  type        = number
+  default     = 50
+}
+
+variable "node_disk_type" {
+  description = "Disk type for nodes (pd-standard, pd-ssd, pd-balanced)"
+  type        = string
+  default     = "pd-balanced"
+}
+
+# ============================================================================
+# Cluster Autoscaling (Node Auto-Provisioning)
+# ============================================================================
+
+variable "cluster_autoscaling_enabled" {
+  description = "Enable cluster autoscaling (node auto-provisioning)"
+  type        = bool
+  default     = false
+}
+
+variable "autoscaling_cpu_min" {
+  description = "Minimum CPU cores for cluster autoscaling"
+  type        = number
+  default     = 1
+}
+
+variable "autoscaling_cpu_max" {
+  description = "Maximum CPU cores for cluster autoscaling"
+  type        = number
+  default     = 10
+}
+
+variable "autoscaling_memory_min" {
+  description = "Minimum memory (GB) for cluster autoscaling"
+  type        = number
+  default     = 1
+}
+
+variable "autoscaling_memory_max" {
+  description = "Maximum memory (GB) for cluster autoscaling"
+  type        = number
+  default     = 32
 }

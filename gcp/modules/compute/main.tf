@@ -1,7 +1,7 @@
 # ============================================================================
 # Compute Module - main.tf (GCP)
 # ============================================================================
-# GKE Autopilot + Workload Identity + Cloud SQL
+# GKE Standard + Workload Identity + Cloud SQL
 # ============================================================================
 
 # ============================================================================
@@ -26,6 +26,14 @@ module "gke" {
   master_ipv4_cidr        = var.gke_master_ipv4_cidr
   master_authorized_cidr  = var.gke_master_authorized_cidr
   release_channel         = var.gke_release_channel
+
+  # Node Pool 설정
+  node_count        = var.gke_node_count
+  node_min_count    = var.gke_node_min_count
+  node_max_count    = var.gke_node_max_count
+  node_machine_type = var.gke_node_machine_type
+  node_disk_size    = var.gke_node_disk_size
+  node_disk_type    = var.gke_node_disk_type
 
   external_secrets_sa_name = var.external_secrets_sa_name
 }

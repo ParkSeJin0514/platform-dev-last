@@ -11,8 +11,8 @@ AWS Primary + GCP DR 환경을 위한 Terraform/Terragrunt IaC 코드
 │         AWS (Primary)           │          GCP (DR/Secondary)       │
 ├─────────────────────────────────┼───────────────────────────────────┤
 │  VPC (10.0.0.0/16)              │  VPC (172.16.0.0/16)              │
-│  EKS + Managed Node Group       │  GKE Autopilot                    │
-│  Karpenter (Auto Scaling)       │  Built-in Auto Scaling            │
+│  EKS + Managed Node Group       │  GKE Standard + Node Pool         │
+│  Karpenter (Auto Scaling)       │  Cluster Autoscaler               │
 │  ALB Controller                 │  GKE Ingress (GCE)                │
 │  EFS CSI Driver                 │  -                                │
 │  External Secrets (AWS SM)      │  External Secrets (GCP SM)        │
@@ -44,7 +44,7 @@ platform-dev-last/
 │   ├── terragrunt.hcl           # Root Terragrunt (GCS Backend)
 │   ├── env.hcl                  # GCP 환경 변수
 │   ├── foundation/              # VPC, Subnet, Cloud NAT
-│   ├── compute/                 # GKE Autopilot, Cloud SQL, VMs
+│   ├── compute/                 # GKE Standard, Cloud SQL, VMs
 │   ├── bootstrap/               # ArgoCD
 │   └── modules/
 │       ├── network/
@@ -376,15 +376,15 @@ cd ../bootstrap && terragrunt apply
 | Layer | 설명 | AWS 리소스 | GCP 리소스 |
 |-------|------|-----------|-----------|
 | **Foundation** | 네트워크 인프라 | VPC, Subnet, NAT Gateway | VPC, Subnet, Cloud NAT |
-| **Compute** | 컴퓨팅 리소스 | EKS, RDS, IAM Roles | GKE Autopilot, Cloud SQL, VMs |
+| **Compute** | 컴퓨팅 리소스 | EKS, RDS, IAM Roles | GKE Standard, Cloud SQL, VMs |
 | **Bootstrap** | GitOps 설정 | ArgoCD | ArgoCD |
 
 ## ☁️ 주요 차이점 (AWS vs GCP)
 
 | 항목 | AWS | GCP |
 |------|-----|-----|
-| Kubernetes | EKS + Managed Node | GKE Autopilot |
-| Auto Scaling | Karpenter | Built-in |
+| Kubernetes | EKS + Managed Node | GKE Standard + Node Pool |
+| Auto Scaling | Karpenter | Cluster Autoscaler |
 | Load Balancer | ALB Controller | GKE Ingress |
 | Storage | EFS CSI Driver | - |
 | IAM | IRSA | Workload Identity |
@@ -581,10 +581,11 @@ ssh gcp-mgmt
 kubectl get pods -A
 ```
 
-### GKE Autopilot
-- 노드 관리 불필요 (완전 관리형)
-- Pod 단위 과금
-- 자동 스케일링
+### GKE Standard
+- Node Pool 기반 노드 관리
+- 노드 단위 과금 (e2-medium 기본)
+- Cluster Autoscaler로 자동 스케일링 (min: 1, max: 3)
+- DR 환경에서 빠른 Failover를 위해 노드 상시 대기
 
 ### Cloud SQL Private Access
 - Private Service Connection 사용
