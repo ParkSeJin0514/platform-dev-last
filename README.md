@@ -295,6 +295,57 @@ aws ec2 authorize-security-group-ingress \
   --cidr 10.0.0.0/16
 ```
 
+## 🗄️ RDS Security Group - Karpenter 노드 접근
+
+RDS Security Group은 다음 Security Group에서의 MySQL(3306) 접근을 허용합니다.
+
+### 허용된 Security Group
+
+| Security Group | 용도 | 설명 |
+|----------------|------|------|
+| **EKS Node SG** | EKS 관리형 노드 | Node Group으로 생성된 EC2 |
+| **EKS Cluster SG** | Karpenter 노드 | Karpenter가 프로비저닝한 EC2 |
+| **Management SG** | Management Instance | 관리용 EC2 |
+
+### 왜 Cluster SG가 필요한가?
+
+Karpenter가 생성하는 노드는 **EKS Cluster Security Group**을 사용합니다:
+- 관리형 노드(Node Group): `node_security_group_id` 사용
+- Karpenter 노드: `cluster_security_group_id` 사용 (EKS가 자동 생성)
+
+```hcl
+# aws/modules/compute/main.tf
+allowed_security_group_ids = [
+  module.eks.node_security_group_id,         # EKS 관리형 노드
+  module.eks.cluster_security_group_id,      # Karpenter 노드
+  module.ec2.mgmt_security_group_id          # Management Instance
+]
+```
+
+### 문제 증상 (Karpenter 노드에서 DB 접근 불가 시)
+
+```
+HikariPool-1 - Starting...
+# 30초 이상 대기 후 반복
+HikariPool-1 - Starting...
+```
+
+Pod가 CrashLoopBackOff 상태가 되고, 로그에 HikariCP가 MySQL 연결을 시도하지만 타임아웃됩니다.
+
+### 수동 확인 (디버깅용)
+
+```bash
+# Karpenter 노드의 Security Group 확인
+aws ec2 describe-instances \
+  --filters "Name=tag:karpenter.sh/nodepool,Values=*" \
+  --query 'Reservations[*].Instances[*].{ID:InstanceId,SG:SecurityGroups[*].GroupId}'
+
+# RDS Security Group 인바운드 규칙 확인
+aws ec2 describe-security-groups \
+  --group-ids <RDS_SG_ID> \
+  --query 'SecurityGroups[*].IpPermissions[*].UserIdGroupPairs[*].GroupId'
+```
+
 ## 🚀 사용 방법
 
 ### GitHub Actions 실행

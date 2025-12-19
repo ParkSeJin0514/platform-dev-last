@@ -157,10 +157,11 @@ module "db" {
   publicly_accessible = false
   multi_az            = var.db_multi_az
 
-  # EKS Worker Node와 Mgmt Instance에서 접근 허용
+  # EKS Worker Node, Karpenter Node, Mgmt Instance에서 접근 허용
   allowed_security_group_ids = [
-    module.eks.node_security_group_id,
-    module.ec2.mgmt_security_group_id
+    module.eks.node_security_group_id,         # EKS 관리형 노드
+    module.eks.cluster_security_group_id,      # Karpenter 노드 (EKS Cluster SG 사용)
+    module.ec2.mgmt_security_group_id          # Management Instance
   ]
 
   deletion_protection       = var.db_deletion_protection
