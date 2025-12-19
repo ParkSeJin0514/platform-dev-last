@@ -19,7 +19,7 @@ resource "google_compute_network" "vpc" {
 # ============================================================================
 resource "google_compute_subnetwork" "public" {
   name          = "${var.project_name}-public-subnet"
-  ip_cidr_range = cidrsubnet(var.vpc_cidr, 8, 1)  # 10.1.1.0/24
+  ip_cidr_range = cidrsubnet(var.vpc_cidr, 8, 10)  # 172.16.10.0/24
   region        = var.region
   network       = google_compute_network.vpc.id
   description   = "Public subnet for Bastion"
@@ -32,7 +32,7 @@ resource "google_compute_subnetwork" "public" {
 # ============================================================================
 resource "google_compute_subnetwork" "private" {
   name          = "${var.project_name}-private-subnet"
-  ip_cidr_range = cidrsubnet(var.vpc_cidr, 8, 2)  # 10.1.2.0/24
+  ip_cidr_range = cidrsubnet(var.vpc_cidr, 8, 50)  # 172.16.50.0/24
   region        = var.region
   network       = google_compute_network.vpc.id
   description   = "Private subnet for Management server"
@@ -45,7 +45,7 @@ resource "google_compute_subnetwork" "private" {
 # ============================================================================
 resource "google_compute_subnetwork" "gke" {
   name          = "${var.project_name}-gke-subnet"
-  ip_cidr_range = cidrsubnet(var.vpc_cidr, 8, 0)  # 10.1.0.0/24
+  ip_cidr_range = cidrsubnet(var.vpc_cidr, 8, 100)  # 172.16.100.0/24
   region        = var.region
   network       = google_compute_network.vpc.id
   description   = "GKE subnet for ${var.project_name}"

@@ -10,7 +10,7 @@ AWS Primary + GCP DR 환경을 위한 Terraform/Terragrunt IaC 코드
 ├─────────────────────────────────┬───────────────────────────────────┤
 │         AWS (Primary)           │          GCP (DR/Secondary)       │
 ├─────────────────────────────────┼───────────────────────────────────┤
-│  VPC (10.0.0.0/16)              │  VPC (10.1.0.0/16)                │
+│  VPC (10.0.0.0/16)              │  VPC (172.16.0.0/16)              │
 │  EKS + Managed Node Group       │  GKE Autopilot                    │
 │  Karpenter (Auto Scaling)       │  Built-in Auto Scaling            │
 │  ALB Controller                 │  GKE Ingress (GCE)                │

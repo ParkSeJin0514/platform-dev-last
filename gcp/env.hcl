@@ -23,7 +23,7 @@ locals {
   # =========================================================================
   # AWS VPC CIDR (10.0.0.0/16)와 다르게 설정
   # 추후 VPN 연결 시 충돌 방지
-  vpc_cidr = "10.1.0.0/16"
+  vpc_cidr = "172.16.0.0/16"
 
   # =========================================================================
   # GKE Autopilot 설정 (Compute)
@@ -34,7 +34,7 @@ locals {
   # Private Cluster 설정
   gke_enable_private_nodes    = true
   gke_enable_private_endpoint = false  # kubectl 접근 허용
-  gke_master_ipv4_cidr        = "172.16.0.0/28"
+  gke_master_ipv4_cidr        = "172.17.0.0/28"
 
   # Master Authorized Networks (GitHub Actions 등에서 접근)
   gke_master_authorized_cidr = "0.0.0.0/0"
