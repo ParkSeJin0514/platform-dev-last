@@ -84,6 +84,22 @@ resource "google_container_cluster" "autopilot" {
 }
 
 # ============================================================================
+# GKE Node Service Account - Default Role 부여
+# ============================================================================
+# GKE Autopilot 클러스터의 로깅, 모니터링, HPA 기능을 위해 필요
+data "google_project" "current" {
+  project_id = var.project_id
+}
+
+resource "google_project_iam_member" "gke_default_node_service_account" {
+  project = var.project_id
+  role    = "roles/container.defaultNodeServiceAccount"
+  member  = "serviceAccount:service-${data.google_project.current.number}@container-engine-robot.iam.gserviceaccount.com"
+
+  depends_on = [google_container_cluster.autopilot]
+}
+
+# ============================================================================
 # Workload Identity - External Secrets Operator
 # ============================================================================
 
