@@ -116,6 +116,12 @@ resource "google_compute_instance" "mgmt" {
     #!/bin/bash
     set -e
 
+    # Variables
+    SSH_USER="${var.ssh_user}"
+    GKE_CLUSTER="${var.gke_cluster_name}"
+    GKE_REGION="${var.gke_cluster_region}"
+    PROJECT_ID="${var.project_id}"
+
     # Install prerequisites
     apt-get update
     apt-get install -y apt-transport-https ca-certificates gnupg curl mysql-client
@@ -137,15 +143,27 @@ resource "google_compute_instance" "mgmt" {
     apt-get install -y kubectl google-cloud-cli-gke-gcloud-auth-plugin docker-ce docker-ce-cli containerd.io
 
     # Add user to docker group
-    usermod -aG docker ${var.ssh_user}
+    usermod -aG docker $SSH_USER
 
-    # Configure GKE cluster credentials for user
-    sudo -u ${var.ssh_user} bash -c '
-      mkdir -p /home/${var.ssh_user}/.kube
-      export HOME=/home/${var.ssh_user}
-      export USE_GKE_GCLOUD_AUTH_PLUGIN=True
-      gcloud container clusters get-credentials ${var.gke_cluster_name} --region ${var.gke_cluster_region} --project ${var.project_id}
-    '
+    # Create .kube directory
+    mkdir -p /home/$SSH_USER/.kube
+    chown $SSH_USER:$SSH_USER /home/$SSH_USER/.kube
+
+    # Add environment variable to bashrc for GKE auth plugin
+    echo 'export USE_GKE_GCLOUD_AUTH_PLUGIN=True' >> /home/$SSH_USER/.bashrc
+
+    # Configure GKE cluster credentials (run as the user with proper environment)
+    su - $SSH_USER -c "export USE_GKE_GCLOUD_AUTH_PLUGIN=True && gcloud container clusters get-credentials $GKE_CLUSTER --region $GKE_REGION --project $PROJECT_ID"
+
+    # Create a script for manual re-configuration if needed
+    cat > /home/$SSH_USER/configure-kubectl.sh << 'SCRIPT'
+#!/bin/bash
+export USE_GKE_GCLOUD_AUTH_PLUGIN=True
+gcloud container clusters get-credentials ${var.gke_cluster_name} --region ${var.gke_cluster_region} --project ${var.project_id}
+echo "kubectl configured for GKE cluster: ${var.gke_cluster_name}"
+SCRIPT
+    chmod +x /home/$SSH_USER/configure-kubectl.sh
+    chown $SSH_USER:$SSH_USER /home/$SSH_USER/configure-kubectl.sh
   EOF
 
   labels = {
