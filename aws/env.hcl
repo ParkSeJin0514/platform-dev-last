@@ -28,7 +28,7 @@ locals {
   # =========================================================================
   bastion_instance_type = "t3.micro"
   mgmt_instance_type    = "t3.small"
-  key_name              = "petclinic-key"
+  key_name              = "aws/keys"
 
   # Ubuntu AMI 필터
   ubuntu_ami_filters = [
