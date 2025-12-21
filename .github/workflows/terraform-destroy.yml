@@ -544,6 +544,46 @@ jobs:
 
           echo "✅ Cloud SQL 정리 완료"
 
+      - name: Final Cleanup - Firewall Rules (Before VPC deletion)
+        continue-on-error: true
+        timeout-minutes: 3
+        run: |
+          echo "🧹 VPC 삭제 전 방화벽 규칙 최종 정리..."
+
+          # VPC 이름 조회
+          VPCS=$(gcloud compute networks list --filter="name~petclinic" --format="value(name)" 2>/dev/null || true)
+
+          for vpc in $VPCS; do
+            echo "  VPC: $vpc의 방화벽 규칙 삭제..."
+
+            # 해당 VPC의 모든 방화벽 규칙 삭제 (k8s 패턴 + 해당 VPC에 연결된 모든 규칙)
+            for fw in $(gcloud compute firewall-rules list --filter="network:$vpc" --format="value(name)" 2>/dev/null); do
+              echo "    삭제: $fw"
+              gcloud compute firewall-rules delete "$fw" --quiet 2>/dev/null || true
+            done
+          done
+
+          # k8s 패턴 방화벽 규칙 한번 더 삭제 (VPC 필터 없이)
+          echo "  k8s 패턴 방화벽 규칙 삭제..."
+          for fw in $(gcloud compute firewall-rules list --filter="name~k8s" --format="value(name)" 2>/dev/null); do
+            echo "    삭제: $fw"
+            gcloud compute firewall-rules delete "$fw" --quiet 2>/dev/null || true
+          done
+
+          # 방화벽 삭제 확인 대기 (최대 30초)
+          echo "  방화벽 삭제 확인..."
+          for i in {1..6}; do
+            REMAINING=$(gcloud compute firewall-rules list --filter="name~k8s OR network~petclinic" --format="value(name)" 2>/dev/null | wc -l)
+            if [ "$REMAINING" -eq 0 ]; then
+              echo "  ✅ 모든 방화벽 규칙 삭제 완료"
+              break
+            fi
+            echo "    대기 중... ($i/6) - 남은 규칙: $REMAINING"
+            sleep 5
+          done
+
+          echo "✅ 방화벽 규칙 최종 정리 완료"
+
       - name: Cleanup VPC Resources (Peering, Routes, Addresses)
         continue-on-error: true
         timeout-minutes: 3

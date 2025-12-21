@@ -575,16 +575,20 @@ GCP에서 Terraform destroy 실행 시 GKE Ingress가 생성한 리소스가 남
        ↓
 8. Cloud SQL 인스턴스 삭제 (VPC Peering 삭제 전 필수!)
        ↓
-9. Service Networking Connection 삭제
+9. 방화벽 규칙 최종 정리 (VPC에 연결된 모든 규칙 재확인)
        ↓
-10. VPC Peering 삭제
+10. Service Networking Connection 삭제
        ↓
-11. Routes 삭제
+11. VPC Peering 삭제
        ↓
-12. Global Address 삭제 (Cloud SQL Private IP)
+12. Routes 삭제
        ↓
-13. Terraform Destroy 실행
+13. Global Address 삭제 (Cloud SQL Private IP)
+       ↓
+14. Terraform Destroy 실행
 ```
+
+> **Note**: 방화벽 규칙 `k8s-fw-l7--*`는 GKE Ingress가 생성하는 L7 로드밸런서 방화벽 규칙입니다. Ingress 삭제 후에도 남아있을 수 있어 VPC 삭제 전에 한번 더 확인합니다.
 
 ### 수동 정리 (필요시)
 
@@ -597,8 +601,11 @@ gcloud sql instances delete <INSTANCE_NAME> --quiet
 # Service Networking Connection 삭제
 gcloud services vpc-peerings delete --service=servicenetworking.googleapis.com --network=petclinic-dr-vpc --quiet
 
-# 방화벽 규칙 확인
-gcloud compute firewall-rules list --filter="name~k8s" --format="table(name,network)"
+# 방화벽 규칙 확인 (VPC에 연결된 모든 규칙)
+gcloud compute firewall-rules list --filter="name~k8s OR network~petclinic" --format="table(name,network)"
+
+# 방화벽 규칙 삭제 (VPC 삭제 차단 방지)
+gcloud compute firewall-rules delete <FW_NAME> --quiet
 
 # NEG 확인 (각 zone별)
 gcloud compute network-endpoint-groups list --format="table(name,zone)"
