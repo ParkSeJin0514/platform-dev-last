@@ -456,21 +456,60 @@ jobs:
 
           echo "✅ Ingress 및 LoadBalancer 정리 완료"
 
-      - name: Cleanup GKE Ingress Resources (NEG, Firewall, Backend Services)
+      - name: Cleanup GKE Ingress Resources (LB Stack → Backend → NEG)
         continue-on-error: true
-        timeout-minutes: 5
+        timeout-minutes: 8
         run: |
           echo "🧹 GKE Ingress 리소스 정리 시작..."
+          echo "   삭제 순서: Forwarding Rules → Target Proxies → URL Maps → Backend Services → Health Checks → NEG → Firewall"
 
-          # 1. GKE가 생성한 방화벽 규칙 삭제 (k8s-fw-* 패턴)
-          echo "  1️⃣ GKE 방화벽 규칙 삭제..."
-          for fw in $(gcloud compute firewall-rules list --filter="name~k8s-fw" --format="value(name)" 2>/dev/null); do
-            echo "    삭제: $fw"
-            gcloud compute firewall-rules delete "$fw" --quiet 2>/dev/null || true
+          # ============================================================
+          # GKE Ingress 삭제 순서 (역순으로 삭제해야 의존성 해결)
+          # Ingress → Forwarding Rule → Target Proxy → URL Map → Backend Service → Health Check → NEG
+          # ============================================================
+
+          # 1. Forwarding Rules 삭제 (가장 먼저 - LB의 최상위 리소스)
+          echo "  1️⃣ Forwarding Rules 삭제..."
+          for fr in $(gcloud compute forwarding-rules list --filter="name~k8s OR name~tf-" --format="value(name)" --global 2>/dev/null); do
+            echo "    삭제: $fr"
+            gcloud compute forwarding-rules delete "$fr" --global --quiet 2>/dev/null || true
           done
 
-          # 2. Network Endpoint Groups (NEG) 삭제 - 모든 zone에서
-          echo "  2️⃣ Network Endpoint Groups 삭제..."
+          # 2. Target HTTP/HTTPS Proxies 삭제
+          echo "  2️⃣ Target HTTP Proxies 삭제..."
+          for proxy in $(gcloud compute target-http-proxies list --filter="name~k8s OR name~tf-" --format="value(name)" 2>/dev/null); do
+            echo "    삭제: $proxy"
+            gcloud compute target-http-proxies delete "$proxy" --global --quiet 2>/dev/null || true
+          done
+          echo "  2️⃣ Target HTTPS Proxies 삭제..."
+          for proxy in $(gcloud compute target-https-proxies list --filter="name~k8s OR name~tf-" --format="value(name)" 2>/dev/null); do
+            echo "    삭제: $proxy"
+            gcloud compute target-https-proxies delete "$proxy" --global --quiet 2>/dev/null || true
+          done
+
+          # 3. URL Maps 삭제
+          echo "  3️⃣ URL Maps 삭제..."
+          for um in $(gcloud compute url-maps list --filter="name~k8s OR name~tf-" --format="value(name)" 2>/dev/null); do
+            echo "    삭제: $um"
+            gcloud compute url-maps delete "$um" --global --quiet 2>/dev/null || true
+          done
+
+          # 4. Backend Services 삭제 (NEG를 참조하므로 NEG 삭제 전에 삭제 필수!)
+          echo "  4️⃣ Backend Services 삭제..."
+          for bs in $(gcloud compute backend-services list --filter="name~k8s OR name~tf-" --format="value(name)" --global 2>/dev/null); do
+            echo "    삭제: $bs"
+            gcloud compute backend-services delete "$bs" --global --quiet 2>/dev/null || true
+          done
+
+          # 5. Health Checks 삭제
+          echo "  5️⃣ Health Checks 삭제..."
+          for hc in $(gcloud compute health-checks list --filter="name~k8s" --format="value(name)" 2>/dev/null); do
+            echo "    삭제: $hc"
+            gcloud compute health-checks delete "$hc" --global --quiet 2>/dev/null || true
+          done
+
+          # 6. Network Endpoint Groups (NEG) 삭제 - Backend Service 삭제 후에만 가능!
+          echo "  6️⃣ Network Endpoint Groups 삭제..."
           for zone in $(gcloud compute zones list --filter="region:${{ env.GCP_REGION }}" --format="value(name)" 2>/dev/null); do
             for neg in $(gcloud compute network-endpoint-groups list --filter="zone:$zone" --format="value(name)" 2>/dev/null); do
               echo "    삭제: $neg (zone: $zone)"
@@ -478,39 +517,29 @@ jobs:
             done
           done
 
-          # 3. Backend Services 삭제 (k8s- 패턴)
-          echo "  3️⃣ Backend Services 삭제..."
-          for bs in $(gcloud compute backend-services list --filter="name~k8s" --format="value(name)" --global 2>/dev/null); do
-            echo "    삭제: $bs"
-            gcloud compute backend-services delete "$bs" --global --quiet 2>/dev/null || true
+          # 7. GKE가 생성한 방화벽 규칙 삭제 (k8s-fw-* 패턴)
+          echo "  7️⃣ GKE 방화벽 규칙 삭제..."
+          for fw in $(gcloud compute firewall-rules list --filter="name~k8s" --format="value(name)" 2>/dev/null); do
+            echo "    삭제: $fw"
+            gcloud compute firewall-rules delete "$fw" --quiet 2>/dev/null || true
           done
 
-          # 4. URL Maps 삭제
-          echo "  4️⃣ URL Maps 삭제..."
-          for um in $(gcloud compute url-maps list --filter="name~k8s" --format="value(name)" 2>/dev/null); do
-            echo "    삭제: $um"
-            gcloud compute url-maps delete "$um" --global --quiet 2>/dev/null || true
-          done
-
-          # 5. Target HTTP Proxies 삭제
-          echo "  5️⃣ Target HTTP Proxies 삭제..."
-          for proxy in $(gcloud compute target-http-proxies list --filter="name~k8s" --format="value(name)" 2>/dev/null); do
-            echo "    삭제: $proxy"
-            gcloud compute target-http-proxies delete "$proxy" --global --quiet 2>/dev/null || true
-          done
-
-          # 6. Forwarding Rules 삭제
-          echo "  6️⃣ Forwarding Rules 삭제..."
-          for fr in $(gcloud compute forwarding-rules list --filter="name~k8s" --format="value(name)" --global 2>/dev/null); do
-            echo "    삭제: $fr"
-            gcloud compute forwarding-rules delete "$fr" --global --quiet 2>/dev/null || true
-          done
-
-          # 7. Health Checks 삭제
-          echo "  7️⃣ Health Checks 삭제..."
-          for hc in $(gcloud compute health-checks list --filter="name~k8s" --format="value(name)" 2>/dev/null); do
-            echo "    삭제: $hc"
-            gcloud compute health-checks delete "$hc" --global --quiet 2>/dev/null || true
+          # NEG 삭제 확인 (최대 1분 대기)
+          echo "  ⏳ NEG 삭제 확인..."
+          for i in {1..6}; do
+            REMAINING=$(gcloud compute network-endpoint-groups list --format="value(name)" 2>/dev/null | wc -l)
+            if [ "$REMAINING" -eq 0 ]; then
+              echo "  ✅ 모든 NEG 삭제 완료"
+              break
+            fi
+            echo "    대기 중... ($i/6) - 남은 NEG: $REMAINING"
+            # 남은 NEG 재시도 삭제
+            for zone in $(gcloud compute zones list --filter="region:${{ env.GCP_REGION }}" --format="value(name)" 2>/dev/null); do
+              for neg in $(gcloud compute network-endpoint-groups list --filter="zone:$zone" --format="value(name)" 2>/dev/null); do
+                gcloud compute network-endpoint-groups delete "$neg" --zone="$zone" --quiet 2>/dev/null || true
+              done
+            done
+            sleep 10
           done
 
           echo "✅ GKE Ingress 리소스 정리 완료"
