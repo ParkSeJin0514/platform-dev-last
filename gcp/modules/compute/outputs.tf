@@ -118,3 +118,11 @@ output "db_credentials_secret_id" {
   description = "Secret Manager secret ID for DB credentials"
   value       = module.cloudsql.db_credentials_secret_id
 }
+
+# ============================================================================
+# ArgoCD 접속 정보
+# ============================================================================
+output "argocd_password_command" {
+  description = "Command to get ArgoCD initial admin password"
+  value       = "kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d && echo"
+}
