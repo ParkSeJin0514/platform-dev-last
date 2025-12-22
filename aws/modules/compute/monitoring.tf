@@ -33,11 +33,7 @@ resource "helm_release" "kube_prometheus_stack" {
   version          = var.kube_prometheus_stack_version
 
   # Prometheus 설정
-  set {
-    name  = "prometheus.prometheusSpec.externalUrl"
-    value = "/prometheus"
-  }
-
+  # routePrefix만 설정, externalUrl은 ALB 주소를 알 수 없으므로 설정하지 않음
   set {
     name  = "prometheus.prometheusSpec.routePrefix"
     value = "/prometheus"
@@ -69,11 +65,7 @@ resource "helm_release" "kube_prometheus_stack" {
   }
 
   # AlertManager 설정
-  set {
-    name  = "alertmanager.alertmanagerSpec.externalUrl"
-    value = "/alertmanager"
-  }
-
+  # routePrefix만 설정, externalUrl은 ALB 주소를 알 수 없으므로 설정하지 않음
   set {
     name  = "alertmanager.alertmanagerSpec.routePrefix"
     value = "/alertmanager"
