@@ -34,9 +34,9 @@ output "private_db_subnet_ids" {
   value       = module.network.private_db_subnet_id
 }
 
-output "nat_gateway_ids" {
-  description = "NAT Gateway ID 리스트"
-  value       = module.network.nat_gateway_ids
+output "nat_gateway_id" {
+  description = "Regional NAT Gateway ID"
+  value       = module.network.nat_gateway_id
 }
 
 output "project_name" {
