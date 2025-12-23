@@ -150,17 +150,49 @@ resource "google_compute_instance" "mgmt" {
     # Add user to docker group
     usermod -aG docker $SSH_USER
 
-    # Create .kube directory
+    # Create .kube directory for SSH_USER
     mkdir -p /home/$SSH_USER/.kube
     chown $SSH_USER:$SSH_USER /home/$SSH_USER/.kube
 
-    # Add environment variables to bashrc for GKE auth plugin (avoid duplicates)
-    grep -q 'USE_GKE_GCLOUD_AUTH_PLUGIN' /home/$SSH_USER/.bashrc || echo 'export USE_GKE_GCLOUD_AUTH_PLUGIN=True' >> /home/$SSH_USER/.bashrc
-    grep -q 'KUBECONFIG=' /home/$SSH_USER/.bashrc || echo "export KUBECONFIG=/home/${var.ssh_user}/.kube/config" >> /home/$SSH_USER/.bashrc
-
-    # Add to /etc/environment for all sessions (non-interactive shells)
+    # =========================================================================
+    # Global environment variables (for ALL users including OS Login users)
+    # =========================================================================
+    # Add to /etc/environment for all sessions
     grep -q 'USE_GKE_GCLOUD_AUTH_PLUGIN' /etc/environment || echo 'USE_GKE_GCLOUD_AUTH_PLUGIN=True' >> /etc/environment
-    grep -q 'KUBECONFIG=' /etc/environment || echo "KUBECONFIG=/home/${var.ssh_user}/.kube/config" >> /etc/environment
+
+    # Create global profile script for kubectl configuration
+    cat > /etc/profile.d/kubectl-setup.sh << 'PROFILE_SCRIPT'
+#!/bin/bash
+# GKE Auth Plugin
+export USE_GKE_GCLOUD_AUTH_PLUGIN=True
+
+# Set KUBECONFIG to user's home directory (works for both regular and OS Login users)
+export KUBECONFIG="$HOME/.kube/config"
+
+# Auto-configure kubectl if .kube/config doesn't exist
+if [ ! -f "$HOME/.kube/config" ] && command -v gcloud &> /dev/null; then
+  mkdir -p "$HOME/.kube"
+fi
+PROFILE_SCRIPT
+    chmod +x /etc/profile.d/kubectl-setup.sh
+
+    # =========================================================================
+    # Global kubectl configuration script (any user can run)
+    # =========================================================================
+    cat > /usr/local/bin/configure-kubectl << GLOBAL_SCRIPT
+#!/bin/bash
+export USE_GKE_GCLOUD_AUTH_PLUGIN=True
+export KUBECONFIG="\$HOME/.kube/config"
+mkdir -p "\$HOME/.kube"
+gcloud container clusters get-credentials ${var.gke_cluster_name} --region ${var.gke_cluster_region} --project ${var.project_id}
+echo "kubectl configured for GKE cluster: ${var.gke_cluster_name}"
+kubectl get nodes
+GLOBAL_SCRIPT
+    chmod +x /usr/local/bin/configure-kubectl
+
+    # Also add to bashrc for SSH_USER
+    grep -q 'USE_GKE_GCLOUD_AUTH_PLUGIN' /home/$SSH_USER/.bashrc || echo 'export USE_GKE_GCLOUD_AUTH_PLUGIN=True' >> /home/$SSH_USER/.bashrc
+    grep -q 'KUBECONFIG=.*\.kube/config' /home/$SSH_USER/.bashrc || echo 'export KUBECONFIG="$HOME/.kube/config"' >> /home/$SSH_USER/.bashrc
 
     # Wait for GKE cluster to be RUNNING (max 5 minutes)
     echo "Waiting for GKE cluster $GKE_CLUSTER to be ready..."
@@ -180,25 +212,15 @@ resource "google_compute_instance" "mgmt" {
     done
 
     if [ "$CLUSTER_STATUS" = "RUNNING" ]; then
-      # Configure GKE cluster credentials
+      # Configure GKE cluster credentials for SSH_USER
       echo "Configuring kubectl for user $SSH_USER..."
-      su - $SSH_USER -c "export USE_GKE_GCLOUD_AUTH_PLUGIN=True && gcloud container clusters get-credentials $GKE_CLUSTER --region $GKE_REGION --project $PROJECT_ID" && echo "kubectl configured successfully!" || echo "WARNING: Failed to configure kubectl"
+      su - $SSH_USER -c "export USE_GKE_GCLOUD_AUTH_PLUGIN=True && export KUBECONFIG=\$HOME/.kube/config && gcloud container clusters get-credentials $GKE_CLUSTER --region $GKE_REGION --project $PROJECT_ID" && echo "kubectl configured successfully!" || echo "WARNING: Failed to configure kubectl"
     else
-      echo "WARNING: GKE cluster not ready after waiting. Run ~/configure-kubectl.sh manually."
+      echo "WARNING: GKE cluster not ready after waiting. Run 'configure-kubectl' manually."
     fi
 
-    # Create a script for manual re-configuration if needed
-    cat > /home/$SSH_USER/configure-kubectl.sh << 'SCRIPT'
-#!/bin/bash
-export USE_GKE_GCLOUD_AUTH_PLUGIN=True
-gcloud container clusters get-credentials ${var.gke_cluster_name} --region ${var.gke_cluster_region} --project ${var.project_id}
-echo "kubectl configured for GKE cluster: ${var.gke_cluster_name}"
-kubectl get nodes
-SCRIPT
-    chmod +x /home/$SSH_USER/configure-kubectl.sh
-    chown $SSH_USER:$SSH_USER /home/$SSH_USER/configure-kubectl.sh
-
     echo "=== Startup script completed at $(date) ==="
+    echo "NOTE: OS Login users can run 'configure-kubectl' to set up kubectl access."
   EOF
 
   labels = {
