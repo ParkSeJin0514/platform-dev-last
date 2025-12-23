@@ -156,11 +156,11 @@ resource "google_compute_instance" "mgmt" {
 
     # Add environment variables to bashrc for GKE auth plugin (avoid duplicates)
     grep -q 'USE_GKE_GCLOUD_AUTH_PLUGIN' /home/$SSH_USER/.bashrc || echo 'export USE_GKE_GCLOUD_AUTH_PLUGIN=True' >> /home/$SSH_USER/.bashrc
-    grep -q 'KUBECONFIG=' /home/$SSH_USER/.bashrc || echo 'export KUBECONFIG=/home/$SSH_USER/.kube/config' >> /home/$SSH_USER/.bashrc
+    grep -q 'KUBECONFIG=' /home/$SSH_USER/.bashrc || echo "export KUBECONFIG=/home/$SSH_USER/.kube/config" >> /home/$SSH_USER/.bashrc
 
     # Add to /etc/environment for all sessions (non-interactive shells)
     grep -q 'USE_GKE_GCLOUD_AUTH_PLUGIN' /etc/environment || echo 'USE_GKE_GCLOUD_AUTH_PLUGIN=True' >> /etc/environment
-    grep -q 'KUBECONFIG=' /etc/environment || echo 'KUBECONFIG=/home/$SSH_USER/.kube/config' >> /etc/environment
+    grep -q 'KUBECONFIG=' /etc/environment || echo "KUBECONFIG=/home/$SSH_USER/.kube/config" >> /etc/environment
 
     # Wait for GKE cluster to be RUNNING (max 5 minutes)
     echo "Waiting for GKE cluster $GKE_CLUSTER to be ready..."
