@@ -166,3 +166,16 @@ resource "google_compute_firewall" "allow_health_check" {
   # GCP Health Check IP 범위
   source_ranges = ["35.191.0.0/16", "130.211.0.0/22"]
 }
+
+# ============================================================================
+# Default Internet Route
+# ============================================================================
+# Cloud NAT가 작동하려면 인터넷 게이트웨이로 가는 route가 필요
+resource "google_compute_route" "default_internet" {
+  name             = "${var.project_name}-default-internet"
+  network          = google_compute_network.vpc.id
+  dest_range       = "0.0.0.0/0"
+  next_hop_gateway = "default-internet-gateway"
+  priority         = 1000
+  description      = "Default route to internet gateway for Cloud NAT"
+}
