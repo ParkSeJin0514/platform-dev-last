@@ -50,10 +50,30 @@ dependency "compute" {
 # ============================================================================
 # Kubernetes/Helm Provider 추가 생성
 # ============================================================================
+# Bootstrap 레이어에서만 kubernetes/helm/kubectl provider를 선언 및 설정
+# 이 provider들은 EKS 클러스터 연결이 필요하므로 compute 레이어 완료 후 사용
+# ============================================================================
 generate "k8s_provider" {
   path      = "_k8s_provider.tf"
   if_exists = "overwrite_terragrunt"
   contents  = <<-EOF
+    terraform {
+      required_providers {
+        kubernetes = {
+          source  = "hashicorp/kubernetes"
+          version = "~> 2.23"
+        }
+        helm = {
+          source  = "hashicorp/helm"
+          version = "~> 2.11"
+        }
+        kubectl = {
+          source  = "gavinbunney/kubectl"
+          version = "~> 1.14"
+        }
+      }
+    }
+
     data "aws_eks_cluster_auth" "cluster" {
       name = "${dependency.compute.outputs.eks_cluster_name}"
     }
