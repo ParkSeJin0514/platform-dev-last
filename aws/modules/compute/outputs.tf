@@ -146,12 +146,12 @@ output "karpenter_iam_ready" {
 # ============================================================================
 output "kube_prometheus_stack_status" {
   description = "kube-prometheus-stack Helm release 상태"
-  value       = helm_release.kube_prometheus_stack.status
+  value       = var.enable_monitoring ? helm_release.kube_prometheus_stack[0].status : "not deployed"
 }
 
 output "kube_prometheus_stack_namespace" {
   description = "kube-prometheus-stack 설치 네임스페이스"
-  value       = helm_release.kube_prometheus_stack.namespace
+  value       = var.enable_monitoring ? helm_release.kube_prometheus_stack[0].namespace : "not deployed"
 }
 
 # ============================================================================
