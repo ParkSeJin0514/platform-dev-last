@@ -19,3 +19,5 @@ Thumbs.db
 # Keys (sensitive)
 *.pem
 *.key
+aws/keys/test
+aws/keys/test.pub

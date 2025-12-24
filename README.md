@@ -25,11 +25,21 @@ AWS Primary + GCP DR 환경을 위한 Terraform/Terragrunt IaC 코드
 platform-dev-last/
 ├── aws/                          # AWS Infrastructure
 │   ├── terragrunt.hcl           # Root Terragrunt (S3 Backend)
-│   ├── env.hcl                  # AWS 환경 변수
+│   ├── env.hcl                  # AWS 환경 변수 (⚠️ 민감정보는 환경변수로)
+│   ├── keys/                    # SSH 키 파일
+│   │   ├── test                 # Private Key (Git에서 제외 권장)
+│   │   └── test.pub             # Public Key (EC2 Key Pair용)
 │   ├── foundation/              # VPC, Subnet, NAT Gateway
-│   ├── compute/                 # EKS, RDS, IAM Roles
-│   ├── bootstrap/               # ArgoCD
-│   └── modules/                 # network, eks, rds, ec2 등
+│   ├── compute/                 # EKS, RDS, EC2, IAM Roles
+│   ├── bootstrap/               # ArgoCD, aws-auth ConfigMap
+│   └── modules/                 # 재사용 가능한 Terraform 모듈
+│       ├── network/             # VPC, Subnet, Route Table
+│       ├── eks/                 # EKS Cluster, Node Group, SG
+│       ├── ec2/                 # Bastion, Management VM
+│       ├── db/                  # RDS MySQL, Parameter Group, SG
+│       ├── foundation/          # Foundation 통합 모듈
+│       ├── compute/             # Compute 통합 모듈 (+ Karpenter IRSA)
+│       └── bootstrap/           # ArgoCD Helm, Root Application
 │
 ├── gcp/                          # GCP Infrastructure
 │   ├── terragrunt.hcl           # Root Terragrunt (GCS Backend)
@@ -58,9 +68,13 @@ platform-dev-last/
 ## 사전 요구사항
 
 ### AWS
-- S3 Bucket (Terraform State)
+- S3 Bucket (Terraform State): `petclinic-kr-tfstate`
+- DynamoDB Table (State Lock): `petclinic-kr-tflock`
 - GitHub Actions OIDC 설정
-- Secrets: `AWS_ROLE_ARN`, `TF_VAR_db_password`, `SSH_PUBLIC_KEY`
+- Secrets:
+  - `AWS_ROLE_ARN`: GitHub Actions가 Assume할 IAM Role
+  - `TF_VAR_db_password`: RDS 비밀번호 (환경변수로 전달)
+  - `SSH_PUBLIC_KEY`: EC2 Key Pair용 공개키 (또는 `aws/keys/test.pub` 사용)
 
 ### GCP
 - GCS Bucket: `kdt2-final-project-t1-tfstate`
@@ -78,6 +92,9 @@ platform-dev-last/
 ### 로컬 실행
 
 ```bash
+# 환경 변수 설정 (필수)
+export TF_VAR_db_password="your_secure_password"
+
 # AWS
 cd aws/foundation && terragrunt apply
 cd ../compute && terragrunt apply
@@ -88,6 +105,32 @@ cd gcp/foundation && terragrunt apply
 cd ../compute && terragrunt apply
 cd ../bootstrap && terragrunt apply
 ```
+
+## 환경 변수 설정
+
+### AWS (aws/env.hcl)
+
+민감한 정보는 환경 변수로 관리합니다.
+
+| 변수 | 설명 | 사용처 |
+|-----|------|-------|
+| `TF_VAR_db_password` | RDS MySQL 비밀번호 | GitHub Secrets → Actions |
+
+```hcl
+# env.hcl에서 환경 변수 참조
+db_password = get_env("TF_VAR_db_password", "")
+```
+
+### SSH Key 설정
+
+EC2 Key Pair는 `aws/keys/test.pub` 파일을 사용합니다.
+
+```hcl
+# compute/terragrunt.hcl
+ssh_public_key = file("${get_repo_root()}/aws/keys/test.pub")
+```
+
+**주의**: Private Key (`aws/keys/test`)는 `.gitignore`에 추가하여 Git에서 제외할 것을 권장합니다.
 
 ## 레이어 설명
 
@@ -201,6 +244,85 @@ kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.pas
 ### Karpenter 노드에서 DB 접근 불가
 - **원인**: RDS SG에 Cluster SG 미등록 (Karpenter 노드는 Cluster SG 사용)
 - **해결**: `cluster_security_group_id`를 RDS 허용 SG에 추가
+
+### Terraform State와 AWS 리소스 불일치 (EntityAlreadyExists)
+GitHub Actions에서 `EntityAlreadyExists` 오류 발생 시 AWS에 리소스가 존재하지만 Terraform State에 없는 상태.
+
+**해결 방법**: 기존 AWS 리소스를 Terraform State로 Import
+
+```bash
+cd aws/compute
+
+# IAM Role Import
+terragrunt import 'module.eks.aws_iam_role.eks_cluster' "petclinic-kr-eks-cluster-role"
+terragrunt import 'module.eks.aws_iam_role.eks_node' "petclinic-kr-eks-node-role"
+terragrunt import 'module.ec2.aws_iam_role.bastion' "petclinic-kr-bastion-role"
+terragrunt import 'module.ec2.aws_iam_role.mgmt' "petclinic-kr-mgmt-role"
+
+# IAM Policy Import
+terragrunt import 'aws_iam_policy.karpenter_controller' "arn:aws:iam::ACCOUNT_ID:policy/petclinic-kr-karpenter-controller"
+
+# Instance Profile Import
+terragrunt import 'module.ec2.aws_iam_instance_profile.bastion' "petclinic-kr-bastion-profile"
+terragrunt import 'module.ec2.aws_iam_instance_profile.mgmt' "petclinic-kr-mgmt-profile"
+
+# IRSA Role Import
+terragrunt import 'aws_iam_role.alb_controller' "petclinic-kr-alb-controller"
+terragrunt import 'aws_iam_role.efs_csi_driver' "petclinic-kr-efs-csi-driver"
+terragrunt import 'aws_iam_role.external_secrets' "petclinic-kr-external-secrets"
+terragrunt import 'aws_iam_role.karpenter_controller' "petclinic-kr-karpenter-controller"
+
+# RDS Parameter Group Import
+TF_VAR_db_password="your_password" terragrunt import 'module.db.aws_db_parameter_group.db_para' "petclinic-kr-db-params"
+
+# Secrets Manager Import
+terragrunt import 'module.db.aws_secretsmanager_secret.db_credentials' "petclinic-kr-db-credentials"
+```
+
+### Key Pair 충돌 (InvalidKeyPair.Duplicate)
+AWS에 Key Pair가 있지만 State에 `public_key` 값 없이 Import된 경우.
+
+**해결 방법**: State에서 제거 후 AWS에서 삭제하여 새로 생성
+
+```bash
+cd aws/compute
+
+# State에서 제거
+terragrunt state rm aws_key_pair.this
+
+# AWS에서 삭제 (Terraform이 새로 생성하도록)
+aws ec2 delete-key-pair --key-name petclinic-kr-key --region ap-northeast-2
+```
+
+### DB Parameter Group 충돌 (DBParameterGroupAlreadyExists)
+RDS Parameter Group이 AWS에 존재하지만 State에 없는 경우.
+
+**해결 방법**: State로 Import (db_password 환경변수 필요)
+
+```bash
+cd aws/compute
+TF_VAR_db_password="your_password" terragrunt import 'module.db.aws_db_parameter_group.db_para' "petclinic-kr-db-params"
+```
+
+### State 확인 및 정리 명령어
+
+```bash
+# 현재 State 리소스 목록 확인
+terragrunt state list
+
+# 특정 리소스 상세 확인
+terragrunt state show 'resource_address'
+
+# State에서 리소스 제거 (AWS 리소스는 유지)
+terragrunt state rm 'resource_address'
+
+# S3 State 파일 직접 확인
+aws s3 ls s3://petclinic-kr-tfstate/ --recursive
+
+# DynamoDB Lock 항목 확인/삭제
+aws dynamodb scan --table-name petclinic-kr-tflock
+aws dynamodb delete-item --table-name petclinic-kr-tflock --key '{"LockID":{"S":"petclinic-kr-tfstate/compute/terraform.tfstate"}}'
+```
 
 ## Monitoring (kube-prometheus-stack)
 
