@@ -253,9 +253,18 @@ jobs:
           KARPENTER_INSTANCES=$(aws ec2 describe-instances \
             --filters "Name=tag-key,Values=karpenter.sh/nodepool" "Name=instance-state-name,Values=running,pending,stopping" \
             --query 'Reservations[*].Instances[*].InstanceId' --output text 2>/dev/null || true)
-          if [ -n "$KARPENTER_INSTANCES" ]; then
-            echo "    종료할 인스턴스: $KARPENTER_INSTANCES"
-            aws ec2 terminate-instances --instance-ids $KARPENTER_INSTANCES 2>/dev/null || true
+
+          # 이름 패턴으로도 검색 (karpenter-node 패턴)
+          KARPENTER_BY_NAME=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=*karpenter*" "Name=instance-state-name,Values=running,pending,stopping" \
+            --query 'Reservations[*].Instances[*].InstanceId' --output text 2>/dev/null || true)
+
+          # 두 결과 합치기 (중복 제거)
+          ALL_KARPENTER_INSTANCES=$(echo "$KARPENTER_INSTANCES $KARPENTER_BY_NAME" | tr ' ' '\n' | sort -u | tr '\n' ' ' | xargs)
+
+          if [ -n "$ALL_KARPENTER_INSTANCES" ]; then
+            echo "    종료할 인스턴스: $ALL_KARPENTER_INSTANCES"
+            aws ec2 terminate-instances --instance-ids $ALL_KARPENTER_INSTANCES 2>/dev/null || true
           else
             echo "    Karpenter EC2 인스턴스 없음"
           fi
