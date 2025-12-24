@@ -48,17 +48,31 @@ dependency "compute" {
 }
 
 # ============================================================================
-# Kubernetes/Helm Provider 추가 생성
+# Provider Override - Bootstrap 전용
 # ============================================================================
-# Bootstrap 레이어에서만 kubernetes/helm/kubectl provider를 선언 및 설정
-# 이 provider들은 EKS 클러스터 연결이 필요하므로 compute 레이어 완료 후 사용
+# Root의 _provider.tf를 override하여 kubernetes/helm/kubectl 추가
+# 모든 required_providers를 하나의 terraform 블록에 선언해야 함
 # ============================================================================
-generate "k8s_provider" {
-  path      = "_k8s_provider.tf"
+generate "provider" {
+  path      = "_provider.tf"
   if_exists = "overwrite_terragrunt"
   contents  = <<-EOF
     terraform {
+      required_version = ">= 1.0"
+
       required_providers {
+        aws = {
+          source  = "hashicorp/aws"
+          version = ">= 6.24.0"
+        }
+        tls = {
+          source  = "hashicorp/tls"
+          version = "~> 4.0"
+        }
+        time = {
+          source  = "hashicorp/time"
+          version = "~> 0.9"
+        }
         kubernetes = {
           source  = "hashicorp/kubernetes"
           version = "~> 2.23"
@@ -70,6 +84,18 @@ generate "k8s_provider" {
         kubectl = {
           source  = "gavinbunney/kubectl"
           version = "~> 1.14"
+        }
+      }
+    }
+
+    provider "aws" {
+      region = "ap-northeast-2"
+
+      default_tags {
+        tags = {
+          Environment = "production"
+          Project     = "petclinic-kr"
+          ManagedBy   = "Terragrunt"
         }
       }
     }
