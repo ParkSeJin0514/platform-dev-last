@@ -735,6 +735,75 @@ jobs:
           echo ""
           echo "✅ EKS 클러스터 및 Node Group 정리 완료"
 
+      # ============================================================
+      # RDS 삭제 (보안 그룹 삭제 전 필수)
+      # ============================================================
+      - name: Delete RDS Instances
+        continue-on-error: true
+        timeout-minutes: 15
+        run: |
+          echo "🧹 RDS 인스턴스 삭제..."
+
+          # petclinic 관련 RDS 인스턴스 조회
+          RDS_INSTANCES=$(aws rds describe-db-instances \
+            --query "DBInstances[?contains(DBInstanceIdentifier, 'petclinic')].DBInstanceIdentifier" \
+            --output text 2>/dev/null || true)
+
+          if [ -z "$RDS_INSTANCES" ]; then
+            echo "  삭제할 RDS 인스턴스 없음"
+          else
+            for db_id in $RDS_INSTANCES; do
+              echo "  RDS 삭제 중: $db_id"
+
+              # Deletion Protection 해제
+              aws rds modify-db-instance \
+                --db-instance-identifier $db_id \
+                --no-deletion-protection \
+                --apply-immediately 2>/dev/null || true
+
+              # 잠시 대기 (설정 적용)
+              sleep 5
+
+              # RDS 삭제 (최종 스냅샷 생성 안 함)
+              aws rds delete-db-instance \
+                --db-instance-identifier $db_id \
+                --skip-final-snapshot \
+                --delete-automated-backups 2>/dev/null || true
+            done
+
+            # RDS 삭제 대기 (최대 10분)
+            echo "  RDS 삭제 대기..."
+            for i in {1..60}; do
+              REMAINING=$(aws rds describe-db-instances \
+                --query "DBInstances[?contains(DBInstanceIdentifier, 'petclinic')].[DBInstanceIdentifier,DBInstanceStatus]" \
+                --output text 2>/dev/null || true)
+
+              if [ -z "$REMAINING" ]; then
+                echo "  ✅ 모든 RDS 인스턴스 삭제 완료"
+                break
+              fi
+
+              echo "    대기 중... ($i/60)"
+              echo "$REMAINING" | while read db_id status; do
+                echo "      - $db_id: $status"
+              done
+              sleep 10
+            done
+          fi
+
+          # DB Subnet Group 삭제
+          echo "  DB Subnet Group 삭제..."
+          DB_SUBNET_GROUPS=$(aws rds describe-db-subnet-groups \
+            --query "DBSubnetGroups[?contains(DBSubnetGroupName, 'petclinic')].DBSubnetGroupName" \
+            --output text 2>/dev/null || true)
+
+          for sg_name in $DB_SUBNET_GROUPS; do
+            echo "    삭제: $sg_name"
+            aws rds delete-db-subnet-group --db-subnet-group-name $sg_name 2>/dev/null || true
+          done
+
+          echo "✅ RDS 정리 완료"
+
       - name: Delete EKS Security Groups
         continue-on-error: true
         timeout-minutes: 10
