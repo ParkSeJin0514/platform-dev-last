@@ -215,13 +215,25 @@ ArgoCD Applications 정리 → Ingress 삭제 → LB 리소스 삭제 (역순)
 - Private Service Connection 사용
 - VPC 내부에서만 접근 가능
 
-### Standalone NEG
+### NEG (Network Endpoint Group) 타입
 
-Service에 NEG annotation 추가하여 GKE 재배포 후에도 동일한 NEG 이름 유지:
+GKE에서 외부 LB와 연동 시 NEG 타입 선택이 중요합니다.
+
+| 항목 | GKE Auto NEG | Standalone NEG |
+|------|-------------|----------------|
+| Annotation | `{"ingress": true}` | `{"exposed_ports": {"8080":{"name": "..."}}}` |
+| NEG 이름 | 자동 생성 (`k8s1-xxx-...`) | 고정 이름 지정 |
+| 엔드포인트 관리 | GKE 자동 관리 ✅ | **Ingress 존재 시 자동 등록 안됨** ❌ |
+| 클러스터 재생성 시 | NEG 이름 변경됨 | NEG 이름 유지 |
+
+**권장**: GKE auto NEG (`{"ingress": true}`)
+- Standalone NEG는 Ingress가 존재할 때 엔드포인트를 자동 등록하지 않음
+- 클러스터 재생성 시 Backend Service 업데이트만 필요
 
 ```yaml
+# overlays/gcp/service-patch.yaml
 annotations:
-  cloud.google.com/neg: '{"exposed_ports": {"8080":{"name": "petclinic-api-gateway-neg"}}}'
+  cloud.google.com/neg: '{"ingress": true}'  # 권장
 ```
 
 ## ArgoCD 접속 정보

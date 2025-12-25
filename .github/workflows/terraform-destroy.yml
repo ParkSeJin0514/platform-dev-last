@@ -1002,18 +1002,7 @@ jobs:
           mkdir -p keys
           echo "${{ secrets.SSH_PUBLIC_KEY }}" > keys/test.pub
 
-      # Destroy Compute (EKS/GKE 먼저 삭제 - 내부 리소스 자동 정리)
-      - name: Destroy Compute
-        if: github.event.inputs.layer == 'all' || github.event.inputs.layer == 'compute'
-        continue-on-error: true
-        timeout-minutes: 30
-        env:
-          TF_VAR_db_password: ${{ secrets.TF_VAR_db_password }}
-        run: |
-          echo "🗑️ Compute Layer Destroy (EKS/GKE 먼저 삭제)..."
-          cd compute && terragrunt destroy --terragrunt-non-interactive -auto-approve || true
-
-      # Destroy Bootstrap (EKS 삭제 후 실행 - ArgoCD 등 내부 리소스는 이미 정리됨)
+      # Destroy Bootstrap (먼저! ArgoCD, Helm 릴리스 정리)
       - name: Destroy Bootstrap
         if: github.event.inputs.layer == 'all' || github.event.inputs.layer == 'bootstrap'
         continue-on-error: true
@@ -1021,8 +1010,19 @@ jobs:
         env:
           TF_VAR_db_password: ${{ secrets.TF_VAR_db_password }}
         run: |
-          echo "🗑️ Bootstrap Layer Destroy..."
+          echo "🗑️ Bootstrap Layer Destroy (ArgoCD, Helm 먼저 삭제)..."
           cd bootstrap && terragrunt destroy --terragrunt-non-interactive -auto-approve || true
+
+      # Destroy Compute (Bootstrap 삭제 후! GKE/EKS, DB 삭제)
+      - name: Destroy Compute
+        if: github.event.inputs.layer == 'all' || github.event.inputs.layer == 'compute'
+        continue-on-error: true
+        timeout-minutes: 30
+        env:
+          TF_VAR_db_password: ${{ secrets.TF_VAR_db_password }}
+        run: |
+          echo "🗑️ Compute Layer Destroy (GKE/EKS, DB 삭제)..."
+          cd compute && terragrunt destroy --terragrunt-non-interactive -auto-approve || true
 
       # Destroy Foundation
       - name: Destroy Foundation
