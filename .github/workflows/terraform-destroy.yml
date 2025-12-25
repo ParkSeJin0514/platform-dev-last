@@ -1002,6 +1002,22 @@ jobs:
           mkdir -p keys
           echo "${{ secrets.SSH_PUBLIC_KEY }}" > keys/test.pub
 
+      # ArgoCD Finalizer 제거 (Namespace 삭제 타임아웃 방지)
+      - name: Remove ArgoCD Finalizers
+        if: github.event.inputs.layer == 'all' || github.event.inputs.layer == 'bootstrap'
+        continue-on-error: true
+        run: |
+          echo "🔧 ArgoCD Finalizer 제거 중..."
+          # ArgoCD Application finalizer 제거
+          kubectl get applications -n argocd -o name 2>/dev/null | while read app; do
+            kubectl patch $app -n argocd -p '{"metadata":{"finalizers":null}}' --type=merge 2>/dev/null || true
+          done
+          # ArgoCD namespace finalizer 제거
+          kubectl get namespace argocd -o json 2>/dev/null | \
+            jq '.spec.finalizers = []' | \
+            kubectl replace --raw "/api/v1/namespaces/argocd/finalize" -f - 2>/dev/null || true
+          echo "✅ Finalizer 제거 완료"
+
       # Destroy Bootstrap (먼저! ArgoCD, Helm 릴리스 정리)
       - name: Destroy Bootstrap
         if: github.event.inputs.layer == 'all' || github.event.inputs.layer == 'bootstrap'
