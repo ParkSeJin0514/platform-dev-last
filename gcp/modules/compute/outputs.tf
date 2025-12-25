@@ -126,3 +126,39 @@ output "argocd_password_command" {
   description = "Command to get ArgoCD initial admin password"
   value       = "kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d && echo"
 }
+
+# ============================================================================
+# mgmt 서버 사용 가이드
+# ============================================================================
+output "kubectl_setup_command" {
+  description = "Command to configure kubectl for GKE (run on mgmt server)"
+  value       = "configure-kubectl"
+}
+
+output "mgmt_quickstart" {
+  description = "Quick start commands for mgmt server"
+  value       = <<-EOT
+    # 1. kubectl 설정 (OS Login 사용자는 필수)
+    configure-kubectl
+
+    # 2. ArgoCD 비밀번호 확인
+    kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d && echo
+
+    # 3. 클러스터 모니터링 Grafana 비밀번호 (kube-prometheus-stack)
+    # Username: admin, Password: ${var.grafana_admin_password}
+  EOT
+}
+
+# ============================================================================
+# kube-prometheus-stack 정보
+# ============================================================================
+output "prometheus_stack_namespace" {
+  description = "kube-prometheus-stack namespace"
+  value       = "petclinic"
+}
+
+output "grafana_cluster_password" {
+  description = "Grafana admin password for kube-prometheus-stack"
+  value       = var.grafana_admin_password
+  sensitive   = true
+}

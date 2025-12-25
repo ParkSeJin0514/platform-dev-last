@@ -184,5 +184,26 @@ output "connection_guide" {
   Instance Profile:   ${aws_iam_instance_profile.karpenter_node.name}
   SQS Queue:          ${aws_sqs_queue.karpenter_interruption.name}
 
+  ============================================
+  📋 Cluster Monitoring (kube-prometheus-stack)
+  ============================================
+
+  Namespace:          petclinic
+  Grafana:            admin / ${var.grafana_admin_password}
+
   EOT
+}
+
+# ============================================================================
+# kube-prometheus-stack 정보
+# ============================================================================
+output "prometheus_stack_namespace" {
+  description = "kube-prometheus-stack namespace"
+  value       = "petclinic"
+}
+
+output "grafana_cluster_password" {
+  description = "Grafana admin password for kube-prometheus-stack"
+  value       = var.grafana_admin_password
+  sensitive   = true
 }

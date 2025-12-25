@@ -256,3 +256,31 @@ variable "github_oidc_role_arn" {
   default     = "arn:aws:iam::946775837287:role/github-actions-terraform"
 }
 
+# ============================================================================
+# kube-prometheus-stack 설정
+# ============================================================================
+variable "prometheus_stack_version" {
+  description = "kube-prometheus-stack Helm chart version"
+  type        = string
+  default     = "65.1.0"
+}
+
+variable "grafana_admin_password" {
+  description = "Grafana admin password"
+  type        = string
+  default     = "admin"
+  sensitive   = true
+}
+
+variable "prometheus_storage_size" {
+  description = "Prometheus storage size"
+  type        = string
+  default     = "10Gi"
+}
+
+variable "grafana_storage_size" {
+  description = "Grafana storage size"
+  type        = string
+  default     = "5Gi"
+}
+

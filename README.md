@@ -326,11 +326,59 @@ aws dynamodb delete-item --table-name petclinic-kr-tflock --key '{"LockID":{"S":
 
 ## Monitoring (kube-prometheus-stack)
 
-kube-prometheus-stack은 **ArgoCD (GitOps)**를 통해 배포합니다.
+kube-prometheus-stack은 **Terraform compute 레이어에서 Helm으로 자동 설치**됩니다.
 
-- Terraform compute 레이어에서 제거됨
-- `platform-gitops-last` 저장소의 Helm 차트로 관리
-- EKS 클러스터 생성 후 ArgoCD가 자동 배포
+### 자동 설치 구성
+
+| 항목 | AWS | GCP |
+|------|-----|-----|
+| Namespace | `petclinic` | `petclinic` |
+| Grafana Service | ClusterIP | NodePort |
+| Prometheus Service | ClusterIP | NodePort |
+| Ingress Class | ALB | GCE |
+
+### 설정 변수 (compute 모듈)
+
+```hcl
+variable "prometheus_stack_version" {
+  default = "65.1.0"
+}
+
+variable "grafana_admin_password" {
+  default   = "admin"
+  sensitive = true
+}
+
+variable "prometheus_storage_size" {
+  default = "10Gi"
+}
+
+variable "grafana_storage_size" {
+  default = "5Gi"
+}
+```
+
+### Ingress 자동 생성
+
+Terraform이 kube-prometheus-stack 설치 후 Ingress도 자동 생성합니다:
+
+- **AWS**: ALB Ingress (Grafana `/`, Prometheus `/prometheus`)
+- **GCP**: GCE Ingress (Grafana `/`, Prometheus `/prometheus`)
+
+> **참고**: petclinic-gitops의 `cluster-monitoring-ingress.yaml`은 주석 처리되어 있습니다. (Terraform에서 관리)
+
+### GCP NodePort 요구사항
+
+GCE Ingress는 NodePort 서비스가 필요합니다. Terraform이 Helm values에서 자동으로 NodePort로 설정합니다:
+
+```yaml
+grafana:
+  service:
+    type: NodePort
+prometheus:
+  service:
+    type: NodePort
+```
 
 ## 관련 저장소
 

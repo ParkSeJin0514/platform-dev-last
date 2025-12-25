@@ -176,3 +176,167 @@ module "db" {
 
   depends_on = [module.eks]
 }
+
+# ============================================================================
+# Kubernetes/Helm Provider 설정
+# ============================================================================
+data "aws_eks_cluster_auth" "cluster" {
+  name = module.eks.cluster_id
+}
+
+provider "kubernetes" {
+  host                   = module.eks.cluster_endpoint
+  cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
+  token                  = data.aws_eks_cluster_auth.cluster.token
+}
+
+provider "helm" {
+  kubernetes {
+    host                   = module.eks.cluster_endpoint
+    cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
+    token                  = data.aws_eks_cluster_auth.cluster.token
+  }
+}
+
+# ============================================================================
+# kube-prometheus-stack Helm Chart (petclinic namespace)
+# ============================================================================
+resource "helm_release" "kube_prometheus_stack" {
+  name             = "kube-prometheus-stack"
+  repository       = "https://prometheus-community.github.io/helm-charts"
+  chart            = "kube-prometheus-stack"
+  version          = var.prometheus_stack_version
+  namespace        = "petclinic"
+  create_namespace = true
+
+  values = [
+    <<-EOT
+    prometheus:
+      prometheusSpec:
+        serviceMonitorSelectorNilUsesHelmValues: false
+        podMonitorSelectorNilUsesHelmValues: false
+        retention: 7d
+        storageSpec:
+          volumeClaimTemplate:
+            spec:
+              accessModes: ["ReadWriteOnce"]
+              resources:
+                requests:
+                  storage: ${var.prometheus_storage_size}
+
+    grafana:
+      enabled: true
+      adminPassword: ${var.grafana_admin_password}
+      persistence:
+        enabled: true
+        size: ${var.grafana_storage_size}
+      sidecar:
+        datasources:
+          enabled: true
+        dashboards:
+          enabled: true
+
+    alertmanager:
+      alertmanagerSpec:
+        storage:
+          volumeClaimTemplate:
+            spec:
+              accessModes: ["ReadWriteOnce"]
+              resources:
+                requests:
+                  storage: 5Gi
+
+    nodeExporter:
+      enabled: true
+    kubeStateMetrics:
+      enabled: true
+    EOT
+  ]
+
+  depends_on = [module.eks]
+}
+
+# ============================================================================
+# Cluster Monitoring Ingress (ALB Ingress for kube-prometheus-stack)
+# ============================================================================
+resource "kubernetes_ingress_v1" "cluster_grafana" {
+  metadata {
+    name      = "cluster-grafana-ingress"
+    namespace = "petclinic"
+    annotations = {
+      "kubernetes.io/ingress.class"                            = "alb"
+      "alb.ingress.kubernetes.io/scheme"                       = "internet-facing"
+      "alb.ingress.kubernetes.io/target-type"                  = "ip"
+      "alb.ingress.kubernetes.io/load-balancer-name"           = "cluster-monitoring-alb"
+      "alb.ingress.kubernetes.io/group.name"                   = "cluster-monitoring"
+      "alb.ingress.kubernetes.io/group.order"                  = "1"
+      "alb.ingress.kubernetes.io/listen-ports"                 = "[{\"HTTP\": 80}]"
+      "alb.ingress.kubernetes.io/healthcheck-path"             = "/api/health"
+      "alb.ingress.kubernetes.io/healthcheck-interval-seconds" = "15"
+      "alb.ingress.kubernetes.io/success-codes"                = "200"
+    }
+  }
+
+  spec {
+    ingress_class_name = "alb"
+    rule {
+      http {
+        path {
+          path      = "/"
+          path_type = "Prefix"
+          backend {
+            service {
+              name = "kube-prometheus-stack-grafana"
+              port {
+                number = 80
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  depends_on = [helm_release.kube_prometheus_stack]
+}
+
+resource "kubernetes_ingress_v1" "cluster_prometheus" {
+  metadata {
+    name      = "cluster-prometheus-ingress"
+    namespace = "petclinic"
+    annotations = {
+      "kubernetes.io/ingress.class"                            = "alb"
+      "alb.ingress.kubernetes.io/scheme"                       = "internet-facing"
+      "alb.ingress.kubernetes.io/target-type"                  = "ip"
+      "alb.ingress.kubernetes.io/load-balancer-name"           = "cluster-monitoring-alb"
+      "alb.ingress.kubernetes.io/group.name"                   = "cluster-monitoring"
+      "alb.ingress.kubernetes.io/group.order"                  = "2"
+      "alb.ingress.kubernetes.io/listen-ports"                 = "[{\"HTTP\": 80}]"
+      "alb.ingress.kubernetes.io/healthcheck-path"             = "/prometheus/-/healthy"
+      "alb.ingress.kubernetes.io/healthcheck-interval-seconds" = "15"
+      "alb.ingress.kubernetes.io/success-codes"                = "200"
+    }
+  }
+
+  spec {
+    ingress_class_name = "alb"
+    rule {
+      http {
+        path {
+          path      = "/prometheus"
+          path_type = "Prefix"
+          backend {
+            service {
+              name = "kube-prometheus-stack-prometheus"
+              port {
+                number = 9090
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  depends_on = [helm_release.kube_prometheus_stack]
+}

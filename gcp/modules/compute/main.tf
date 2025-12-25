@@ -128,3 +128,137 @@ module "cloudsql" {
 
   external_secrets_sa_email = module.gke.external_secrets_sa_email
 }
+
+# ============================================================================
+# Kubernetes/Helm Provider 설정
+# ============================================================================
+data "google_client_config" "default" {}
+
+provider "kubernetes" {
+  host                   = "https://${module.gke.cluster_endpoint}"
+  token                  = data.google_client_config.default.access_token
+  cluster_ca_certificate = base64decode(module.gke.cluster_ca_certificate)
+}
+
+provider "helm" {
+  kubernetes {
+    host                   = "https://${module.gke.cluster_endpoint}"
+    token                  = data.google_client_config.default.access_token
+    cluster_ca_certificate = base64decode(module.gke.cluster_ca_certificate)
+  }
+}
+
+# ============================================================================
+# kube-prometheus-stack Helm Chart (petclinic namespace)
+# ============================================================================
+# petclinic namespace는 ArgoCD에서 생성하므로, create_namespace = true로 설정
+# 이미 존재하면 그대로 사용
+# ============================================================================
+resource "helm_release" "kube_prometheus_stack" {
+  name             = "kube-prometheus-stack"
+  repository       = "https://prometheus-community.github.io/helm-charts"
+  chart            = "kube-prometheus-stack"
+  version          = var.prometheus_stack_version
+  namespace        = "petclinic"
+  create_namespace = true
+
+  # GCE Ingress를 위해 서비스를 NodePort로 설정
+  values = [
+    <<-EOT
+    prometheus:
+      service:
+        type: NodePort
+      prometheusSpec:
+        serviceMonitorSelectorNilUsesHelmValues: false
+        podMonitorSelectorNilUsesHelmValues: false
+        retention: 7d
+        storageSpec:
+          volumeClaimTemplate:
+            spec:
+              accessModes: ["ReadWriteOnce"]
+              resources:
+                requests:
+                  storage: ${var.prometheus_storage_size}
+
+    grafana:
+      enabled: true
+      service:
+        type: NodePort
+      adminPassword: ${var.grafana_admin_password}
+      persistence:
+        enabled: true
+        size: ${var.grafana_storage_size}
+      sidecar:
+        datasources:
+          enabled: true
+        dashboards:
+          enabled: true
+
+    alertmanager:
+      service:
+        type: NodePort
+      alertmanagerSpec:
+        storage:
+          volumeClaimTemplate:
+            spec:
+              accessModes: ["ReadWriteOnce"]
+              resources:
+                requests:
+                  storage: 5Gi
+
+    nodeExporter:
+      enabled: true
+    kubeStateMetrics:
+      enabled: true
+    EOT
+  ]
+
+  depends_on = [module.gke]
+}
+
+# ============================================================================
+# Cluster Monitoring Ingress (GCE Ingress for kube-prometheus-stack)
+# ============================================================================
+resource "kubernetes_ingress_v1" "cluster_monitoring" {
+  metadata {
+    name      = "cluster-monitoring-ingress"
+    namespace = "petclinic"
+    annotations = {
+      "kubernetes.io/ingress.class" = "gce"
+    }
+  }
+
+  spec {
+    ingress_class_name = "gce"
+    rule {
+      http {
+        path {
+          path      = "/"
+          path_type = "Prefix"
+          backend {
+            service {
+              name = "kube-prometheus-stack-grafana"
+              port {
+                number = 80
+              }
+            }
+          }
+        }
+        path {
+          path      = "/prometheus"
+          path_type = "Prefix"
+          backend {
+            service {
+              name = "kube-prometheus-stack-prometheus"
+              port {
+                number = 9090
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  depends_on = [helm_release.kube_prometheus_stack]
+}
