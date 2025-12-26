@@ -1094,11 +1094,116 @@ jobs:
           echo "Cloud: ${{ github.event.inputs.cloud }}"
           echo "Layer: ${{ github.event.inputs.layer }}"
 
+  # ============================================================================
+  # AWS Post-Cleanup (Terraform Destroy 후 남은 리소스 정리)
+  # ============================================================================
+  aws-post-cleanup:
+    name: 'AWS Post-Cleanup'
+    needs: [destroy]
+    if: always() && github.event.inputs.cloud == 'aws'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Force Delete Security Groups
+        continue-on-error: true
+        timeout-minutes: 5
+        run: |
+          echo "🧹 보안 그룹 강제 삭제..."
+
+          VPC_ID=$(aws ec2 describe-vpcs \
+            --filters "Name=tag:Name,Values=*petclinic*" \
+            --query 'Vpcs[0].VpcId' --output text 2>/dev/null || true)
+
+          if [ -n "$VPC_ID" ] && [ "$VPC_ID" != "None" ]; then
+            echo "  VPC ID: $VPC_ID"
+
+            SG_LIST=$(aws ec2 describe-security-groups \
+              --filters "Name=vpc-id,Values=$VPC_ID" \
+              --query 'SecurityGroups[*].GroupId' --output text 2>/dev/null || true)
+
+            # 1단계: 모든 규칙 제거
+            echo "  1️⃣ 보안 그룹 규칙 제거..."
+            for sg_id in $SG_LIST; do
+              SG_NAME=$(aws ec2 describe-security-groups --group-ids $sg_id \
+                --query 'SecurityGroups[0].GroupName' --output text 2>/dev/null || echo "unknown")
+              [ "$SG_NAME" = "default" ] && continue
+
+              # Ingress 규칙 제거
+              for rule_id in $(aws ec2 describe-security-group-rules \
+                --filters "Name=group-id,Values=$sg_id" \
+                --query 'SecurityGroupRules[?IsEgress==`false`].SecurityGroupRuleId' \
+                --output text 2>/dev/null || true); do
+                [ -z "$rule_id" ] || [ "$rule_id" = "None" ] && continue
+                aws ec2 revoke-security-group-ingress --group-id $sg_id \
+                  --security-group-rule-ids $rule_id 2>/dev/null || true
+              done
+
+              # Egress 규칙 제거
+              for rule_id in $(aws ec2 describe-security-group-rules \
+                --filters "Name=group-id,Values=$sg_id" \
+                --query 'SecurityGroupRules[?IsEgress==`true`].SecurityGroupRuleId' \
+                --output text 2>/dev/null || true); do
+                [ -z "$rule_id" ] || [ "$rule_id" = "None" ] && continue
+                aws ec2 revoke-security-group-egress --group-id $sg_id \
+                  --security-group-rule-ids $rule_id 2>/dev/null || true
+              done
+            done
+
+            # 2단계: 보안 그룹 삭제
+            echo "  2️⃣ 보안 그룹 삭제..."
+            for sg_id in $SG_LIST; do
+              SG_NAME=$(aws ec2 describe-security-groups --group-ids $sg_id \
+                --query 'SecurityGroups[0].GroupName' --output text 2>/dev/null || echo "unknown")
+              [ "$SG_NAME" = "default" ] && continue
+              echo "    삭제: $sg_id ($SG_NAME)"
+              aws ec2 delete-security-group --group-id $sg_id 2>/dev/null || true
+            done
+
+            # 3단계: 재시도 (의존성으로 실패한 경우)
+            echo "  3️⃣ 남은 보안 그룹 재시도..."
+            for i in {1..3}; do
+              REMAINING=$(aws ec2 describe-security-groups \
+                --filters "Name=vpc-id,Values=$VPC_ID" \
+                --query 'SecurityGroups[?GroupName!=`default`].GroupId' \
+                --output text 2>/dev/null || true)
+              if [ -z "$REMAINING" ]; then
+                echo "  ✅ 모든 보안 그룹 삭제 완료"
+                break
+              fi
+              for sg_id in $REMAINING; do
+                aws ec2 delete-security-group --group-id $sg_id 2>/dev/null || true
+              done
+              sleep 5
+            done
+          else
+            echo "  petclinic VPC 없음 - 스킵"
+          fi
+
+          # k8s/eks 패턴 보안 그룹 삭제 (VPC 외부)
+          echo "  4️⃣ k8s/eks 패턴 보안 그룹 삭제..."
+          for sg_id in $(aws ec2 describe-security-groups \
+            --filters "Name=group-name,Values=k8s-*,eks-cluster-sg-*" \
+            --query 'SecurityGroups[*].GroupId' --output text 2>/dev/null || true); do
+            echo "    삭제: $sg_id"
+            aws ec2 delete-security-group --group-id $sg_id 2>/dev/null || true
+          done
+
+          echo "✅ 보안 그룹 삭제 완료"
+
+      - name: Post-Cleanup Complete
+        run: echo "✅ AWS Post-Cleanup 완료"
+
   # ============================================
   # Slack 알림 - 완료
   # ============================================
   notify-complete:
-    needs: [destroy]
+    needs: [destroy, aws-post-cleanup]
     if: always()
     runs-on: ubuntu-latest
     steps:
