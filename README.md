@@ -1,8 +1,8 @@
-# Platform Infrastructure (Multi-Cloud: AWS / GCP)
+# 🏗️ Platform Infrastructure (Multi-Cloud: AWS / GCP)
 
 AWS Primary + GCP DR 환경을 위한 Terraform/Terragrunt IaC 코드
 
-## 아키텍처 개요
+## 🌐 아키텍처 개요
 
 ```
 ┌─────────────────────────────────┬───────────────────────────────────┐
@@ -20,7 +20,7 @@ AWS Primary + GCP DR 환경을 위한 Terraform/Terragrunt IaC 코드
 └─────────────────────────────────┴───────────────────────────────────┘
 ```
 
-## 디렉토리 구조
+## 📁 디렉토리 구조
 
 ```
 platform-dev-last/
@@ -56,7 +56,7 @@ platform-dev-last/
     └── terraform-pr.yml         # PR 생성 시 Plan 실행
 ```
 
-## Provider 버전
+## 📦 Provider 버전
 
 | Provider | AWS | GCP |
 |----------|-----|-----|
@@ -66,9 +66,9 @@ platform-dev-last/
 | Kubernetes | `~> 2.23` | `~> 2.23` |
 | Helm | `~> 2.11` | `~> 2.11` |
 
-## 사전 요구사항
+## ✅ 사전 요구사항
 
-### AWS
+### ☁️ AWS
 - S3 Bucket (Terraform State): `petclinic-kr-tfstate`
 - DynamoDB Table (State Lock): `petclinic-kr-tflock`
 - GitHub Actions OIDC 설정
@@ -77,20 +77,20 @@ platform-dev-last/
   - `TF_VAR_db_password`: RDS 비밀번호 (환경변수로 전달)
   - `SSH_PUBLIC_KEY`: EC2 Key Pair용 공개키 (또는 `aws/keys/test.pub` 사용)
 
-### GCP
+### ☁️ GCP
 - GCS Bucket: `kdt2-final-project-t1-tfstate`
 - Workload Identity Pool 및 Provider 설정
 
-## 사용 방법
+## 🚀 사용 방법
 
-### GitHub Actions 실행
+### 🔄 GitHub Actions 실행
 
 1. **Actions** 탭 → **Terraform Apply** 워크플로우 선택
 2. **Run workflow** → 옵션 선택:
    - **Cloud**: `aws` 또는 `gcp`
    - **Layer**: `all`, `foundation`, `compute`, `bootstrap`
 
-### 로컬 실행
+### 💻 로컬 실행
 
 ```bash
 # 환경 변수 설정 (필수)
@@ -107,9 +107,9 @@ cd ../compute && terragrunt apply
 cd ../bootstrap && terragrunt apply
 ```
 
-## 환경 변수 설정
+## ⚙️ 환경 변수 설정
 
-### AWS (aws/env.hcl)
+### 🔐 AWS (aws/env.hcl)
 
 민감한 정보는 환경 변수로 관리합니다.
 
@@ -122,7 +122,7 @@ cd ../bootstrap && terragrunt apply
 db_password = get_env("TF_VAR_db_password", "")
 ```
 
-### SSH Key 설정
+### 🔑 SSH Key 설정
 
 EC2 Key Pair는 `aws/keys/test.pub` 파일을 사용합니다.
 
@@ -133,7 +133,7 @@ ssh_public_key = file("${get_repo_root()}/aws/keys/test.pub")
 
 **주의**: Private Key (`aws/keys/test`)는 `.gitignore`에 추가하여 Git에서 제외할 것을 권장합니다.
 
-## 레이어 설명
+## 📊 레이어 설명
 
 | Layer | AWS | GCP |
 |-------|-----|-----|
@@ -141,7 +141,7 @@ ssh_public_key = file("${get_repo_root()}/aws/keys/test.pub")
 | **Compute** | EKS, RDS, EBS CSI Driver, IAM Roles | GKE Standard, Cloud SQL, VMs |
 | **Bootstrap** | ArgoCD | ArgoCD |
 
-## AWS vs GCP 주요 차이점
+## ⚖️ AWS vs GCP 주요 차이점
 
 | 항목 | AWS | GCP |
 |------|-----|-----|
@@ -153,7 +153,7 @@ ssh_public_key = file("${get_repo_root()}/aws/keys/test.pub")
 | Database | RDS MySQL | Cloud SQL MySQL |
 | State Backend | S3 | GCS |
 
-## Regional NAT Gateway (AWS)
+## 🌍 Regional NAT Gateway (AWS)
 
 AWS Provider 6.24.0부터 지원. 단일 NAT Gateway로 모든 AZ 커버.
 
@@ -163,7 +163,7 @@ AWS Provider 6.24.0부터 지원. 단일 NAT Gateway로 모든 AZ 커버.
 | Route Table | AZ별 Private RT | **단일 Private RT** |
 | 비용 | NAT Gateway × AZ | **1개** |
 
-## Slack 알림
+## 📢 Slack 알림
 
 | 워크플로우 | 시작 알림 | 완료 알림 |
 |-----------|----------|----------|
@@ -171,7 +171,7 @@ AWS Provider 6.24.0부터 지원. 단일 NAT Gateway로 모든 AZ 커버.
 | Terraform Destroy | 승인 요청 | 성공/실패 |
 | Terraform Plan (PR) | - | Plan 완료 |
 
-## Destroy 승인 프로세스
+## 🗑️ Destroy 승인 프로세스
 
 인프라 삭제 전 **팀장 승인** 필요:
 
@@ -181,27 +181,27 @@ AWS Provider 6.24.0부터 지원. 단일 NAT Gateway로 모든 AZ 커버.
 4. Pre-Cleanup + Terraform Destroy
 5. 완료 알림
 
-### GitHub Environment 설정
+### 🔒 GitHub Environment 설정
 
 Repository → Settings → Environments → `production` 생성 → Required reviewers 추가
 
-## Pre-Cleanup (Destroy 전 정리)
+## 🧹 Pre-Cleanup (Destroy 전 정리)
 
-### AWS
+### ☁️ AWS
 
 ```
 Karpenter Controller 중지 → NodePool 삭제 → EC2 종료 → ArgoCD Applications 정리
 → Ingress/LB Service 삭제 → ALB 강제 삭제 → Target Group 삭제 → Terraform Destroy
 ```
 
-### GCP
+### ☁️ GCP
 
 ```
 ArgoCD Applications 정리 → Ingress 삭제 → LB 리소스 삭제 (역순)
 → NEG 삭제 → Firewall 삭제 → Cloud SQL 삭제 → VPC Peering 삭제 → Terraform Destroy
 ```
 
-#### NEG 자동 정리 (Terragrunt before_hook)
+#### 🔧 NEG 자동 정리 (Terragrunt before_hook)
 
 GCP compute 레이어 destroy 시 NEG가 Load Balancer 백엔드 서비스에 연결되어 있으면 삭제가 실패합니다.
 이를 해결하기 위해 `before_hook`으로 NEG를 자동 정리합니다.
@@ -222,23 +222,23 @@ terraform {
 
 **주의**: NEG는 GKE가 자동 생성하므로 삭제해도 다음 apply 시 Service 배포와 함께 자동 재생성됩니다.
 
-## GCP 특이사항
+## ☁️ GCP 특이사항
 
-### Management VM 자동 설정
+### 🖥️ Management VM 자동 설정
 - kubectl, Docker, mysql-client 자동 설치
 - GKE 인증 자동 설정 (`configure-kubectl` 명령어 제공)
 - OS Login 사용자 지원
 
-### GKE Standard + Node Pool
+### ⚙️ GKE Standard + Node Pool
 - 노드용 Service Account 자동 생성
 - 오토스케일링: `min_node_count` ~ `max_node_count`
 - Public Cluster 모드 (방화벽으로 보안 제어)
 
-### Cloud SQL Private Access
+### 🔒 Cloud SQL Private Access
 - Private Service Connection 사용
 - VPC 내부에서만 접근 가능
 
-### NEG (Network Endpoint Group) 타입
+### 🌐 NEG (Network Endpoint Group) 타입
 
 GKE에서 외부 LB와 연동 시 NEG 타입 선택이 중요합니다.
 
@@ -259,28 +259,28 @@ annotations:
   cloud.google.com/neg: '{"ingress": true}'  # 권장
 ```
 
-## ArgoCD 접속 정보
+## 🔐 ArgoCD 접속 정보
 
 ```bash
 # 초기 비밀번호 확인
 kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d && echo
 ```
 
-## 트러블슈팅
+## 🔧 트러블슈팅
 
-### ArgoCD Auto-Sync 안됨
+### ❌ ArgoCD Auto-Sync 안됨
 - **원인**: Application Controller 초기화 전 root-app 생성
 - **해결**: `time_sleep` 30초 대기 후 root-app 생성
 
-### Karpenter 노드 등록 실패
+### ❌ Karpenter 노드 등록 실패
 - **원인**: IAM Role/Policy 전파 전 노드 부트스트랩
 - **해결**: `time_sleep` 30초 대기 후 EKS Access Entry 생성
 
-### Karpenter 노드에서 DB 접근 불가
+### ❌ Karpenter 노드에서 DB 접근 불가
 - **원인**: RDS SG에 Cluster SG 미등록 (Karpenter 노드는 Cluster SG 사용)
 - **해결**: `cluster_security_group_id`를 RDS 허용 SG에 추가
 
-### PVC Pending 상태 (unbound immediate PersistentVolumeClaims)
+### ❌ PVC Pending 상태 (unbound immediate PersistentVolumeClaims)
 - **원인**: EBS CSI Driver 미설치 또는 StorageClass 미설정
 - **증상**: Prometheus, Grafana, Alertmanager Pod가 Pending 상태
 - **해결**: EBS CSI Driver가 자동 설치되므로 compute 레이어 재배포
@@ -292,7 +292,7 @@ kubectl get storageclass                        # gp3가 default인지 확인
 kubectl get pvc -n petclinic                    # PVC 상태 확인
 ```
 
-### Terraform State와 AWS 리소스 불일치 (EntityAlreadyExists)
+### ❌ Terraform State와 AWS 리소스 불일치 (EntityAlreadyExists)
 GitHub Actions에서 `EntityAlreadyExists` 오류 발생 시 AWS에 리소스가 존재하지만 Terraform State에 없는 상태.
 
 **해결 방법**: 기존 AWS 리소스를 Terraform State로 Import
@@ -326,7 +326,7 @@ TF_VAR_db_password="your_password" terragrunt import 'module.db.aws_db_parameter
 terragrunt import 'module.db.aws_secretsmanager_secret.db_credentials' "petclinic-kr-db-credentials"
 ```
 
-### Key Pair 충돌 (InvalidKeyPair.Duplicate)
+### ❌ Key Pair 충돌 (InvalidKeyPair.Duplicate)
 AWS에 Key Pair가 있지만 State에 `public_key` 값 없이 Import된 경우.
 
 **해결 방법**: State에서 제거 후 AWS에서 삭제하여 새로 생성
@@ -341,7 +341,7 @@ terragrunt state rm aws_key_pair.this
 aws ec2 delete-key-pair --key-name petclinic-kr-key --region ap-northeast-2
 ```
 
-### DB Parameter Group 충돌 (DBParameterGroupAlreadyExists)
+### ❌ DB Parameter Group 충돌 (DBParameterGroupAlreadyExists)
 RDS Parameter Group이 AWS에 존재하지만 State에 없는 경우.
 
 **해결 방법**: State로 Import (db_password 환경변수 필요)
@@ -351,7 +351,7 @@ cd aws/compute
 TF_VAR_db_password="your_password" terragrunt import 'module.db.aws_db_parameter_group.db_para' "petclinic-kr-db-params"
 ```
 
-### State 확인 및 정리 명령어
+### 🛠️ State 확인 및 정리 명령어
 
 ```bash
 # 현재 State 리소스 목록 확인
@@ -371,11 +371,11 @@ aws dynamodb scan --table-name petclinic-kr-tflock
 aws dynamodb delete-item --table-name petclinic-kr-tflock --key '{"LockID":{"S":"petclinic-kr-tfstate/compute/terraform.tfstate"}}'
 ```
 
-## Monitoring (kube-prometheus-stack)
+## 📈 Monitoring (kube-prometheus-stack)
 
 kube-prometheus-stack은 **Terraform compute 레이어에서 Helm으로 자동 설치**됩니다.
 
-### 자동 설치 구성
+### ⚙️ 자동 설치 구성
 
 | 항목 | AWS | GCP |
 |------|-----|-----|
@@ -384,7 +384,7 @@ kube-prometheus-stack은 **Terraform compute 레이어에서 Helm으로 자동 �
 | Prometheus Service | ClusterIP | NodePort |
 | Ingress Class | ALB | GCE |
 
-### 설정 변수 (compute 모듈)
+### 📝 설정 변수 (compute 모듈)
 
 ```hcl
 # EBS CSI Driver (AWS Only)
@@ -411,7 +411,7 @@ variable "grafana_storage_size" {
 }
 ```
 
-### AWS EBS CSI Driver
+### 💾 AWS EBS CSI Driver
 
 Kubernetes 1.23+ 에서는 EBS 볼륨 프로비저닝을 위해 EBS CSI Driver가 필수입니다.
 
@@ -428,7 +428,7 @@ kubectl get storageclass
 # gp3 (default)   ebs.csi.aws.com         Delete          WaitForFirstConsumer   true                   1h
 ```
 
-### Ingress 관리
+### 🌐 Ingress 관리
 
 Ingress는 **petclinic-gitops에서 통합 관리**됩니다:
 
@@ -437,7 +437,7 @@ Ingress는 **petclinic-gitops에서 통합 관리**됩니다:
 
 > Terraform은 Helm Chart만 설치하고, Ingress는 GitOps로 관리하여 모든 Ingress를 한 곳에서 관리합니다.
 
-### GCP NodePort 요구사항
+### 🔌 GCP NodePort 요구사항
 
 GCE Ingress는 NodePort 서비스가 필요합니다. Terraform이 Helm values에서 자동으로 NodePort로 설정합니다:
 
@@ -450,7 +450,7 @@ prometheus:
     type: NodePort
 ```
 
-## 관련 저장소
+## 🔗 관련 저장소
 
 | 저장소 | 설명 |
 |--------|------|
