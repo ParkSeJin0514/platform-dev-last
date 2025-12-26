@@ -280,6 +280,7 @@ resource "helm_release" "kube_prometheus_stack" {
         storageSpec:
           volumeClaimTemplate:
             spec:
+              storageClassName: gp3
               accessModes: ["ReadWriteOnce"]
               resources:
                 requests:
@@ -290,7 +291,11 @@ resource "helm_release" "kube_prometheus_stack" {
       adminPassword: ${var.grafana_admin_password}
       persistence:
         enabled: true
+        type: pvc
+        storageClassName: gp3
         size: ${var.grafana_storage_size}
+        accessModes:
+          - ReadWriteOnce
       sidecar:
         datasources:
           enabled: true
@@ -302,6 +307,7 @@ resource "helm_release" "kube_prometheus_stack" {
         storage:
           volumeClaimTemplate:
             spec:
+              storageClassName: gp3
               accessModes: ["ReadWriteOnce"]
               resources:
                 requests:
