@@ -178,28 +178,10 @@ module "db" {
 }
 
 # ============================================================================
-# Kubernetes/Helm Provider 설정
-# ============================================================================
-data "aws_eks_cluster_auth" "cluster" {
-  name = module.eks.cluster_id
-}
-
-provider "kubernetes" {
-  host                   = module.eks.cluster_endpoint
-  cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
-  token                  = data.aws_eks_cluster_auth.cluster.token
-}
-
-provider "helm" {
-  kubernetes {
-    host                   = module.eks.cluster_endpoint
-    cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
-    token                  = data.aws_eks_cluster_auth.cluster.token
-  }
-}
-
-# ============================================================================
 # EBS CSI Driver EKS Addon
+# ============================================================================
+# Note: Kubernetes 리소스 (StorageClass, Helm releases)는 Bootstrap 모듈에서 관리
+# Compute 모듈은 EKS 클러스터 생성 전에 실행되므로 Kubernetes API에 연결할 수 없음
 # ============================================================================
 resource "aws_eks_addon" "ebs_csi" {
   cluster_name             = module.eks.cluster_id
@@ -217,114 +199,3 @@ resource "aws_eks_addon" "ebs_csi" {
 
   depends_on = [module.eks]
 }
-
-# ============================================================================
-# gp3 StorageClass (default)
-# ============================================================================
-resource "kubernetes_storage_class" "gp3" {
-  metadata {
-    name = "gp3"
-    annotations = {
-      "storageclass.kubernetes.io/is-default-class" = "true"
-    }
-  }
-
-  storage_provisioner = "ebs.csi.aws.com"
-  reclaim_policy      = "Delete"
-  volume_binding_mode = "WaitForFirstConsumer"
-  allow_volume_expansion = true
-
-  parameters = {
-    type   = "gp3"
-    fsType = "ext4"
-  }
-
-  depends_on = [aws_eks_addon.ebs_csi]
-}
-
-# gp2 StorageClass의 default 해제
-resource "kubernetes_annotations" "gp2_non_default" {
-  api_version = "storage.k8s.io/v1"
-  kind        = "StorageClass"
-  metadata {
-    name = "gp2"
-  }
-  annotations = {
-    "storageclass.kubernetes.io/is-default-class" = "false"
-  }
-
-  depends_on = [kubernetes_storage_class.gp3]
-}
-
-# ============================================================================
-# kube-prometheus-stack Helm Chart (petclinic namespace)
-# ============================================================================
-resource "helm_release" "kube_prometheus_stack" {
-  name             = "kube-prometheus-stack"
-  repository       = "https://prometheus-community.github.io/helm-charts"
-  chart            = "kube-prometheus-stack"
-  version          = var.prometheus_stack_version
-  namespace        = "petclinic"
-  create_namespace = true
-  timeout          = 900  # 15분 (kube-prometheus-stack은 무거움)
-  wait             = true
-  wait_for_jobs    = true
-
-  values = [
-    <<-EOT
-    prometheus:
-      prometheusSpec:
-        serviceMonitorSelectorNilUsesHelmValues: false
-        podMonitorSelectorNilUsesHelmValues: false
-        retention: 7d
-        storageSpec:
-          volumeClaimTemplate:
-            spec:
-              storageClassName: gp3
-              accessModes: ["ReadWriteOnce"]
-              resources:
-                requests:
-                  storage: ${var.prometheus_storage_size}
-
-    grafana:
-      enabled: true
-      adminPassword: ${var.grafana_admin_password}
-      persistence:
-        enabled: true
-        type: pvc
-        storageClassName: gp3
-        size: ${var.grafana_storage_size}
-        accessModes:
-          - ReadWriteOnce
-      sidecar:
-        datasources:
-          enabled: true
-        dashboards:
-          enabled: true
-
-    alertmanager:
-      alertmanagerSpec:
-        storage:
-          volumeClaimTemplate:
-            spec:
-              storageClassName: gp3
-              accessModes: ["ReadWriteOnce"]
-              resources:
-                requests:
-                  storage: 5Gi
-
-    nodeExporter:
-      enabled: true
-    kubeStateMetrics:
-      enabled: true
-    EOT
-  ]
-
-  depends_on = [kubernetes_storage_class.gp3]
-}
-
-# ============================================================================
-# Cluster Monitoring Ingress는 petclinic-gitops에서 관리
-# ============================================================================
-# Ingress 리소스는 petclinic-gitops/overlays/aws/cluster-monitoring-ingress.yaml에서 관리
-# Terraform은 kube-prometheus-stack Helm Chart만 설치

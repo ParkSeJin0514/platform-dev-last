@@ -265,31 +265,3 @@ variable "ebs_csi_driver_version" {
   default     = "v1.37.0-eksbuild.1"
 }
 
-# ============================================================================
-# kube-prometheus-stack 설정
-# ============================================================================
-variable "prometheus_stack_version" {
-  description = "kube-prometheus-stack Helm chart version"
-  type        = string
-  default     = "65.1.0"
-}
-
-variable "grafana_admin_password" {
-  description = "Grafana admin password"
-  type        = string
-  default     = "admin"
-  sensitive   = true
-}
-
-variable "prometheus_storage_size" {
-  description = "Prometheus storage size"
-  type        = string
-  default     = "10Gi"
-}
-
-variable "grafana_storage_size" {
-  description = "Grafana storage size"
-  type        = string
-  default     = "5Gi"
-}
-
