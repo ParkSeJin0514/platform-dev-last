@@ -1100,7 +1100,7 @@ jobs:
 
       - name: Force Delete Remaining EKS Clusters
         continue-on-error: true
-        timeout-minutes: 15
+        timeout-minutes: 20
         run: |
           echo "🧹 남은 EKS 클러스터 강제 삭제..."
 
@@ -1117,65 +1117,111 @@ jobs:
             echo "  삭제할 EKS 클러스터 없음"
           else
             for cluster in $EKS_CLUSTERS; do
-              echo "  클러스터 삭제: $cluster"
+              echo "  =========================================="
+              echo "  클러스터 삭제 시작: $cluster"
+              echo "  =========================================="
 
-              # Node Group 삭제
-              for ng in $(aws eks list-nodegroups --cluster-name $cluster --query 'nodegroups[*]' --output text 2>/dev/null || true); do
-                echo "    Node Group 삭제: $ng"
-                aws eks delete-nodegroup --cluster-name $cluster --nodegroup-name $ng 2>/dev/null || true
+              # 1. Add-ons 삭제 (먼저!)
+              echo "  1️⃣ Add-ons 삭제..."
+              for addon in $(aws eks list-addons --cluster-name $cluster --query 'addons[*]' --output text 2>/dev/null || true); do
+                echo "    Add-on 삭제: $addon"
+                aws eks delete-addon --cluster-name $cluster --addon-name $addon 2>/dev/null || true
               done
 
-              # Fargate Profile 삭제
+              # Add-ons 삭제 대기 (최대 2분)
+              echo "    Add-ons 삭제 대기..."
+              for i in {1..12}; do
+                ADDON_COUNT=$(aws eks list-addons --cluster-name $cluster --query 'length(addons)' --output text 2>/dev/null || echo "0")
+                if [ "$ADDON_COUNT" = "0" ]; then
+                  echo "    ✅ Add-ons 삭제 완료"
+                  break
+                fi
+                echo "      대기 중... ($i/12) - 남은 Add-ons: $ADDON_COUNT"
+                sleep 10
+              done
+
+              # 2. Fargate Profile 삭제
+              echo "  2️⃣ Fargate Profile 삭제..."
               for fp in $(aws eks list-fargate-profiles --cluster-name $cluster --query 'fargateProfileNames[*]' --output text 2>/dev/null || true); do
                 echo "    Fargate Profile 삭제: $fp"
                 aws eks delete-fargate-profile --cluster-name $cluster --fargate-profile-name $fp 2>/dev/null || true
               done
 
-              # Add-ons 삭제
-              for addon in $(aws eks list-addons --cluster-name $cluster --query 'addons[*]' --output text 2>/dev/null || true); do
-                aws eks delete-addon --cluster-name $cluster --addon-name $addon 2>/dev/null || true
+              # Fargate Profile 삭제 대기
+              for i in {1..12}; do
+                FP_COUNT=$(aws eks list-fargate-profiles --cluster-name $cluster --query 'length(fargateProfileNames)' --output text 2>/dev/null || echo "0")
+                if [ "$FP_COUNT" = "0" ]; then
+                  echo "    ✅ Fargate Profile 삭제 완료"
+                  break
+                fi
+                echo "      대기 중... ($i/12)"
+                sleep 10
+              done
+
+              # 3. Node Group 삭제
+              echo "  3️⃣ Node Group 삭제..."
+              for ng in $(aws eks list-nodegroups --cluster-name $cluster --query 'nodegroups[*]' --output text 2>/dev/null || true); do
+                echo "    Node Group 삭제: $ng"
+                # Node Group 상태 확인
+                NG_STATUS=$(aws eks describe-nodegroup --cluster-name $cluster --nodegroup-name $ng --query 'nodegroup.status' --output text 2>/dev/null || echo "UNKNOWN")
+                echo "      현재 상태: $NG_STATUS"
+                if [ "$NG_STATUS" != "DELETING" ]; then
+                  aws eks delete-nodegroup --cluster-name $cluster --nodegroup-name $ng 2>/dev/null || true
+                fi
               done
             done
 
-            # Node Group 삭제 대기
-            echo "  Node Group 삭제 대기..."
-            for i in {1..30}; do
+            # Node Group 삭제 대기 (최대 8분 - 더 길게)
+            echo "  Node Group 삭제 대기 (최대 8분)..."
+            for i in {1..48}; do
               ALL_DELETED=true
               for cluster in $EKS_CLUSTERS; do
-                NG_COUNT=$(aws eks list-nodegroups --cluster-name $cluster --query 'length(nodegroups)' --output text 2>/dev/null || echo "0")
-                if [ "$NG_COUNT" != "0" ]; then
+                NG_LIST=$(aws eks list-nodegroups --cluster-name $cluster --query 'nodegroups[*]' --output text 2>/dev/null || true)
+                if [ -n "$NG_LIST" ]; then
                   ALL_DELETED=false
-                  break
+                  # 각 Node Group 상태 출력
+                  for ng in $NG_LIST; do
+                    NG_STATUS=$(aws eks describe-nodegroup --cluster-name $cluster --nodegroup-name $ng --query 'nodegroup.status' --output text 2>/dev/null || echo "UNKNOWN")
+                    echo "    $cluster/$ng: $NG_STATUS"
+                  done
                 fi
               done
               if [ "$ALL_DELETED" = true ]; then
-                echo "  ✅ Node Group 삭제 완료"
+                echo "  ✅ 모든 Node Group 삭제 완료"
                 break
               fi
-              echo "    대기 중... ($i/30)"
+              echo "    대기 중... ($i/48)"
               sleep 10
             done
 
-            # EKS 클러스터 삭제
+            # 4. EKS 클러스터 삭제
+            echo "  4️⃣ EKS 클러스터 삭제..."
             for cluster in $EKS_CLUSTERS; do
               echo "  EKS 클러스터 삭제 요청: $cluster"
-              aws eks delete-cluster --name $cluster 2>/dev/null || true
+              CLUSTER_STATUS=$(aws eks describe-cluster --name $cluster --query 'cluster.status' --output text 2>/dev/null || echo "UNKNOWN")
+              echo "    현재 상태: $CLUSTER_STATUS"
+              if [ "$CLUSTER_STATUS" != "DELETING" ]; then
+                aws eks delete-cluster --name $cluster 2>/dev/null || true
+              fi
             done
 
-            # 클러스터 삭제 대기
-            echo "  EKS 클러스터 삭제 대기..."
+            # 클러스터 삭제 대기 (최대 10분)
+            echo "  EKS 클러스터 삭제 대기 (최대 10분)..."
             for i in {1..60}; do
               REMAINING=""
               for c in $(aws eks list-clusters --query 'clusters[*]' --output text 2>/dev/null || true); do
                 if echo "$c" | grep -qi "petclinic"; then
                   REMAINING="$REMAINING $c"
+                  # 상태 출력
+                  C_STATUS=$(aws eks describe-cluster --name $c --query 'cluster.status' --output text 2>/dev/null || echo "UNKNOWN")
+                  echo "    $c: $C_STATUS"
                 fi
               done
               if [ -z "$(echo $REMAINING | xargs)" ]; then
                 echo "  ✅ 모든 EKS 클러스터 삭제 완료"
                 break
               fi
-              echo "    대기 중... ($i/60) - 남은 클러스터: $REMAINING"
+              echo "    대기 중... ($i/60)"
               sleep 10
             done
           fi
