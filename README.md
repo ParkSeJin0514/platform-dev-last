@@ -39,8 +39,8 @@ platform-dev-last/
 │       ├── ec2/                 # Bastion, Management VM
 │       ├── db/                  # RDS MySQL, Parameter Group, SG
 │       ├── foundation/          # Foundation 통합 모듈
-│       ├── compute/             # Compute 통합 모듈 (+ Karpenter IRSA)
-│       └── bootstrap/           # ArgoCD Helm, Root Application
+│       ├── compute/             # Compute 통합 모듈 (EKS, RDS, Karpenter IRSA)
+│       └── bootstrap/           # StorageClass, kube-prometheus-stack, ArgoCD
 │
 ├── gcp/                          # GCP Infrastructure
 │   ├── terragrunt.hcl           # Root Terragrunt (GCS Backend)
