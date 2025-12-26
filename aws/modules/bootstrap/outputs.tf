@@ -20,6 +20,7 @@ output "argocd_server_url" {
 
 output "argocd_access_guide" {
   description = "ArgoCD 접속 가이드"
+  sensitive   = true
   value       = <<-EOT
 
   ============================================
