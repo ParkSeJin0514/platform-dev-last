@@ -89,30 +89,3 @@ variable "gitops_target_revision" {
   description = "GitOps Repository 브랜치/태그"
   default     = "main"
 }
-
-# ============================================================================
-# kube-prometheus-stack 설정
-# ============================================================================
-variable "prometheus_stack_version" {
-  type        = string
-  description = "kube-prometheus-stack Helm Chart 버전"
-  default     = "58.2.2"
-}
-
-variable "prometheus_storage_size" {
-  type        = string
-  description = "Prometheus 스토리지 크기"
-  default     = "20Gi"
-}
-
-variable "grafana_admin_password" {
-  type        = string
-  description = "Grafana 관리자 비밀번호"
-  sensitive   = true
-}
-
-variable "grafana_storage_size" {
-  type        = string
-  description = "Grafana 스토리지 크기"
-  default     = "5Gi"
-}

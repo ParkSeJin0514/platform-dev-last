@@ -107,17 +107,13 @@ locals {
   # =========================================================================
   # ArgoCD 설정 (Bootstrap)
   # =========================================================================
-  argocd_chart_version    = "5.51.6"
-  argocd_namespace        = "argocd"
-  gitops_repo_url = "https://github.com/ParkSeJin0514/platform-gitops-last.git"
-  gitops_target_revision  = "main"
+  argocd_chart_version   = "5.51.6"
+  argocd_namespace       = "argocd"
+  gitops_repo_url        = "https://github.com/ParkSeJin0514/platform-gitops-last.git"
+  gitops_target_revision = "main"
 
   # =========================================================================
-  # kube-prometheus-stack 설정 (Bootstrap)
-  # Alertmanager 비활성화됨
+  # kube-prometheus-stack은 ArgoCD에서 관리
+  # platform-gitops-last 저장소에서 설정
   # =========================================================================
-  prometheus_stack_version = "58.2.2"
-  prometheus_storage_size  = "20Gi"
-  grafana_admin_password   = get_env("TF_VAR_grafana_admin_password", "admin123!")
-  grafana_storage_size     = "5Gi"
 }

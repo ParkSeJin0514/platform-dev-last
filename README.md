@@ -40,7 +40,7 @@ platform-dev-last/
 │       ├── db/                  # RDS MySQL, Parameter Group, SG
 │       ├── foundation/          # Foundation 통합 모듈
 │       ├── compute/             # Compute 통합 모듈 (EKS, RDS, Karpenter IRSA)
-│       └── bootstrap/           # StorageClass, kube-prometheus-stack, ArgoCD
+│       └── bootstrap/           # StorageClass, ArgoCD (kube-prometheus-stack은 ArgoCD 관리)
 │
 ├── gcp/                          # GCP Infrastructure
 │   ├── terragrunt.hcl           # Root Terragrunt (GCS Backend)
@@ -198,7 +198,8 @@ Karpenter Controller 중지 → NodePool 삭제 → EC2 종료 → ArgoCD Applic
 
 **Terraform 리소스 배치:**
 - **Compute**: EKS, RDS, EC2, EBS CSI Add-on
-- **Bootstrap**: StorageClass (gp3), kube-prometheus-stack (Alertmanager 비활성화), ArgoCD
+- **Bootstrap**: StorageClass (gp3), ArgoCD
+- **ArgoCD 관리**: kube-prometheus-stack (platform-gitops-last 저장소)
 
 ### ☁️ GCP
 
@@ -288,14 +289,14 @@ kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.pas
 
 ### ❌ PVC Pending 상태 (unbound immediate PersistentVolumeClaims)
 - **원인**: EBS CSI Driver 미설치 또는 StorageClass 미설정
-- **증상**: Prometheus, Grafana Pod가 Pending 상태
+- **증상**: Pod가 Pending 상태
 - **해결**: EBS CSI Driver가 자동 설치되므로 compute 레이어 재배포
 
 ```bash
 # 확인 명령어
 kubectl get pods -n kube-system | grep ebs     # EBS CSI Driver Pod 확인
 kubectl get storageclass                        # gp3가 default인지 확인
-kubectl get pvc -n petclinic                    # PVC 상태 확인
+kubectl get pvc -A                              # PVC 상태 확인
 ```
 
 ### ❌ Terraform State와 AWS 리소스 불일치 (EntityAlreadyExists)

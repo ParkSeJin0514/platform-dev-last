@@ -20,7 +20,6 @@ output "argocd_server_url" {
 
 output "argocd_access_guide" {
   description = "ArgoCD 접속 가이드"
-  sensitive   = true
   value       = <<-EOT
 
   ============================================
@@ -48,25 +47,11 @@ output "argocd_access_guide" {
   External Secrets:   ${var.external_secrets_role_arn}
 
   ============================================
-  Cluster Monitoring (kube-prometheus-stack)
+  Cluster Monitoring
   ============================================
 
-  Namespace:          petclinic
-  Grafana:            admin / ${var.grafana_admin_password}
+  kube-prometheus-stack은 ArgoCD에서 관리됩니다.
+  platform-gitops-last 저장소의 설정을 확인하세요.
 
   EOT
-}
-
-# ============================================================================
-# kube-prometheus-stack 정보
-# ============================================================================
-output "prometheus_stack_namespace" {
-  description = "kube-prometheus-stack namespace"
-  value       = "petclinic"
-}
-
-output "grafana_admin_password" {
-  description = "Grafana admin password"
-  value       = var.grafana_admin_password
-  sensitive   = true
 }

@@ -1,7 +1,8 @@
 # ============================================================================
 # Bootstrap Module - main.tf
 # ============================================================================
-# EKS 클러스터 설정: StorageClass, kube-prometheus-stack, ArgoCD
+# EKS 클러스터 설정: StorageClass, ArgoCD
+# kube-prometheus-stack은 ArgoCD에서 관리
 # ============================================================================
 
 # ============================================================================
@@ -36,67 +37,6 @@ resource "kubernetes_annotations" "gp2_non_default" {
   annotations = {
     "storageclass.kubernetes.io/is-default-class" = "false"
   }
-
-  depends_on = [kubernetes_storage_class.gp3]
-}
-
-# ============================================================================
-# kube-prometheus-stack Helm Chart (petclinic namespace)
-# Alertmanager 비활성화
-# ============================================================================
-resource "helm_release" "kube_prometheus_stack" {
-  name             = "kube-prometheus-stack"
-  repository       = "https://prometheus-community.github.io/helm-charts"
-  chart            = "kube-prometheus-stack"
-  version          = var.prometheus_stack_version
-  namespace        = "petclinic"
-  create_namespace = true
-  timeout          = 900
-  wait             = true
-  wait_for_jobs    = true
-
-  values = [
-    <<-EOT
-    prometheus:
-      prometheusSpec:
-        serviceMonitorSelectorNilUsesHelmValues: false
-        podMonitorSelectorNilUsesHelmValues: false
-        retention: 7d
-        storageSpec:
-          volumeClaimTemplate:
-            spec:
-              storageClassName: gp3
-              accessModes: ["ReadWriteOnce"]
-              resources:
-                requests:
-                  storage: ${var.prometheus_storage_size}
-
-    grafana:
-      enabled: true
-      adminPassword: ${var.grafana_admin_password}
-      persistence:
-        enabled: true
-        type: pvc
-        storageClassName: gp3
-        size: ${var.grafana_storage_size}
-        accessModes:
-          - ReadWriteOnce
-      sidecar:
-        datasources:
-          enabled: true
-        dashboards:
-          enabled: true
-
-    # Alertmanager 비활성화
-    alertmanager:
-      enabled: false
-
-    nodeExporter:
-      enabled: true
-    kubeStateMetrics:
-      enabled: true
-    EOT
-  ]
 
   depends_on = [kubernetes_storage_class.gp3]
 }
