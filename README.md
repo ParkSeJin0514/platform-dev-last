@@ -192,8 +192,13 @@ Repository → Settings → Environments → `production` 생성 → Required re
 
 ```
 Karpenter Controller 중지 → NodePool 삭제 → EC2 종료 → ArgoCD Applications 정리
-→ Ingress/LB Service 삭제 → ALB 강제 삭제 → Target Group 삭제 → Terraform Destroy
+→ StorageClass/Helm/Add-ons 삭제 → Ingress/LB Service 삭제 → ALB 강제 삭제
+→ Target Group 삭제 → Terraform Destroy (Bootstrap → Compute → SG 삭제 → Foundation)
 ```
+
+**Terraform 리소스 배치:**
+- **Compute**: EKS, RDS, EC2, EBS CSI Add-on
+- **Bootstrap**: StorageClass (gp3), kube-prometheus-stack, ArgoCD
 
 ### ☁️ GCP
 
