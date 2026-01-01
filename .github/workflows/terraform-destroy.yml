@@ -191,26 +191,84 @@ jobs:
             echo "cluster_exists=false" >> $GITHUB_OUTPUT
           fi
 
+      # ============================================================
+      # 1단계: ArgoCD Applications 완전 삭제 (가장 먼저!)
+      # - 모든 Controller가 복구되지 않도록 ArgoCD를 먼저 제거
+      # ============================================================
+      - name: Cleanup ArgoCD Applications (FIRST!)
+        if: steps.configure-kubectl.outputs.cluster_exists == 'true'
+        continue-on-error: true
+        timeout-minutes: 3
+        run: |
+          echo "🧹 [1단계] ArgoCD Applications 완전 삭제 (가장 먼저!)..."
+          echo "   → 이후 Controller들이 복구되지 않도록 ArgoCD를 먼저 제거합니다."
+
+          # 1-1. 모든 ArgoCD Application의 Auto-Sync 비활성화
+          echo "  1️⃣ 모든 ArgoCD Application Auto-Sync 비활성화..."
+          for app in $(kubectl get applications -n argocd -o name 2>/dev/null); do
+            kubectl patch $app -n argocd --type merge \
+              -p '{"spec":{"syncPolicy":null}}' 2>/dev/null || true
+          done
+
+          # 1-2. ArgoCD Application Finalizer 제거 및 삭제
+          echo "  2️⃣ ArgoCD Applications Finalizer 제거 및 삭제..."
+          for app in $(kubectl get applications -n argocd -o name 2>/dev/null); do
+            APP_NAME=$(echo $app | cut -d'/' -f2)
+            echo "    삭제 중: $APP_NAME"
+            kubectl patch $app -n argocd -p '{"metadata":{"finalizers":null}}' --type=merge 2>/dev/null || true
+            kubectl delete $app -n argocd --force --grace-period=0 --timeout=30s 2>/dev/null || true
+          done
+
+          # 1-3. ArgoCD 자체 중지 (Application이 재생성되지 않도록)
+          echo "  3️⃣ ArgoCD Controller 중지..."
+          kubectl scale deployment argocd-application-controller -n argocd --replicas=0 --timeout=60s 2>/dev/null || true
+          kubectl scale deployment argocd-repo-server -n argocd --replicas=0 --timeout=60s 2>/dev/null || true
+          kubectl scale deployment argocd-server -n argocd --replicas=0 --timeout=60s 2>/dev/null || true
+
+          echo "✅ ArgoCD 완전 삭제 완료"
+
+      # ============================================================
+      # 2단계: AWS Load Balancer Controller 중지
+      # - ALB가 재생성되지 않도록 Controller를 먼저 중지
+      # ============================================================
+      - name: Stop AWS Load Balancer Controller
+        if: steps.configure-kubectl.outputs.cluster_exists == 'true'
+        continue-on-error: true
+        timeout-minutes: 2
+        run: |
+          echo "🧹 [2단계] AWS Load Balancer Controller 중지..."
+          echo "   → ALB가 재생성되지 않도록 Controller를 먼저 중지합니다."
+
+          # AWS Load Balancer Controller 중지
+          kubectl scale deployment aws-load-balancer-controller -n kube-system --replicas=0 --timeout=60s 2>/dev/null || true
+
+          # Controller가 완전히 중지될 때까지 대기
+          echo "  Controller 중지 대기 중..."
+          for i in {1..6}; do
+            RUNNING_PODS=$(kubectl get pods -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller --field-selector=status.phase=Running -o name 2>/dev/null | wc -l)
+            if [ "$RUNNING_PODS" -eq 0 ]; then
+              echo "  ✅ AWS Load Balancer Controller 중지 완료"
+              break
+            fi
+            echo "    대기 중... ($i/6)"
+            sleep 5
+          done
+
+          echo "✅ AWS Load Balancer Controller 중지 완료"
+
+      # ============================================================
+      # 3단계: Karpenter 정리
+      # - ArgoCD와 LB Controller가 중지된 후 안전하게 정리
+      # ============================================================
       - name: Cleanup Karpenter Resources
         if: steps.configure-kubectl.outputs.cluster_exists == 'true'
         continue-on-error: true
         timeout-minutes: 8
         run: |
-          echo "🧹 Karpenter 정리 시작..."
+          echo "🧹 [3단계] Karpenter 정리 시작..."
+          echo "   → ArgoCD가 이미 삭제되어 Karpenter가 복구되지 않습니다."
 
-          # ============================================================
-          # 핵심: ArgoCD가 Karpenter를 복구하지 못하도록 먼저 비활성화!
-          # 순서: ArgoCD Sync 비활성화 → Controller 중지 → NodePool 삭제 → EC2 종료
-          # ============================================================
-
-          # 0. ArgoCD Karpenter Application Auto-Sync 비활성화 (selfHeal 방지)
-          echo "  0️⃣ ArgoCD Karpenter Application Auto-Sync 비활성화..."
-          kubectl patch application karpenter -n argocd --type merge \
-            -p '{"spec":{"syncPolicy":null}}' 2>/dev/null || true
-          kubectl patch application karpenter-config -n argocd --type merge \
-            -p '{"spec":{"syncPolicy":null}}' 2>/dev/null || true
-
-          # 1. Karpenter Controller 중지 (가장 먼저! 새 노드 생성 방지)
+          # 1. Karpenter Controller 중지 (새 노드 생성 방지)
           echo "  1️⃣ Karpenter Controller 중지..."
           kubectl scale deployment karpenter -n kube-system --replicas=0 --timeout=60s 2>/dev/null || true
 
@@ -226,7 +284,7 @@ jobs:
             sleep 5
           done
 
-          # 2. NodePool 삭제 (새 노드 생성 방지 - Controller가 재시작해도 NodePool 없으면 생성 불가)
+          # 2. NodePool 삭제
           echo "  2️⃣ NodePool 삭제..."
           kubectl get nodepools -o name 2>/dev/null | while read np; do
             kubectl patch $np -p '{"metadata":{"finalizers":null}}' --type=merge 2>/dev/null || true
@@ -306,21 +364,9 @@ jobs:
 
           echo "✅ Karpenter 정리 완료"
 
-      - name: Cleanup ArgoCD Applications
-        if: steps.configure-kubectl.outputs.cluster_exists == 'true'
-        continue-on-error: true
-        timeout-minutes: 2
-        run: |
-          echo "🧹 ArgoCD 정리 시작..."
-
-          # Application Finalizer 제거 및 삭제
-          kubectl get applications -n argocd -o name 2>/dev/null | while read app; do
-            kubectl patch $app -n argocd -p '{"metadata":{"finalizers":null}}' --type=merge 2>/dev/null || true
-            kubectl delete $app -n argocd --force --grace-period=0 --timeout=30s 2>/dev/null || true
-          done
-
-          echo "✅ ArgoCD 정리 완료"
-
+      # ============================================================
+      # 4단계: Terraform 관리 K8s 리소스 정리
+      # ============================================================
       - name: Cleanup Terraform-managed K8s Resources
         if: steps.configure-kubectl.outputs.cluster_exists == 'true'
         continue-on-error: true
@@ -358,12 +404,17 @@ jobs:
 
           echo "✅ Terraform 관리 K8s 리소스 정리 완료"
 
+      # ============================================================
+      # 5단계: K8s Ingress/LoadBalancer Service 삭제
+      # - Controller가 중지되어 있으므로 재생성되지 않음
+      # ============================================================
       - name: Cleanup Ingress and LoadBalancer Services
         if: steps.configure-kubectl.outputs.cluster_exists == 'true'
         continue-on-error: true
         timeout-minutes: 3
         run: |
-          echo "🧹 Ingress 및 LoadBalancer 정리 시작..."
+          echo "🧹 [5단계] Ingress 및 LoadBalancer 정리 시작..."
+          echo "   → AWS LB Controller가 중지되어 ALB가 재생성되지 않습니다."
 
           # 모든 Ingress 삭제
           kubectl get ingress -A -o json 2>/dev/null | jq -r '.items[] | "\(.metadata.namespace) \(.metadata.name)"' | while read ns name; do
@@ -380,12 +431,16 @@ jobs:
 
           echo "✅ Ingress 및 LoadBalancer 정리 완료"
 
+      # ============================================================
+      # 6단계: ALB 및 Target Group 강제 삭제
+      # - K8s 리소스 삭제 후 AWS 리소스 정리
+      # ============================================================
       - name: Force Delete ALB and Target Groups
         if: steps.configure-kubectl.outputs.cluster_exists == 'true'
         continue-on-error: true
         timeout-minutes: 10
         run: |
-          echo "🧹 ALB 및 Target Group 강제 삭제..."
+          echo "🧹 [6단계] ALB 및 Target Group 강제 삭제..."
 
           # ============================================================
           # petclinic VPC의 모든 ALB 삭제 (VPC 기반 - 누락 방지)
