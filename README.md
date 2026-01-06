@@ -140,7 +140,70 @@ ssh_public_key = file("${get_repo_root()}/aws/keys/test.pub")
 | **Foundation** | VPC, Subnet, Regional NAT Gateway | VPC, Subnet, Cloud NAT |
 | **Compute** | EKS, RDS, EBS CSI Driver, IAM Roles | GKE Standard, Cloud SQL, VMs, kube-prometheus-stack |
 | **Bootstrap** | StorageClass (gp3), ArgoCD | ArgoCD |
-| **ArgoCD 관리** | kube-prometheus-stack | - |
+| **ArgoCD 관리** | kube-prometheus-stack, Argo Rollouts | - |
+
+## 🔄 배포 전략 (Blue-Green with Argo Rollouts)
+
+### 아키텍처 개요
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      Argo Rollouts Blue-Green                    │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│   [사용자 트래픽]                                                 │
+│         │                                                        │
+│         ▼                                                        │
+│   ┌─────────────────┐         ┌─────────────────┐               │
+│   │ Active Service  │         │ Preview Service │               │
+│   │ (customers-svc) │         │ (customers-prev)│               │
+│   └────────┬────────┘         └────────┬────────┘               │
+│            │                           │                         │
+│            ▼                           ▼                         │
+│   ┌─────────────────┐         ┌─────────────────┐               │
+│   │  Blue (현재)    │         │  Green (신규)   │               │
+│   │  ReplicaSet     │         │  ReplicaSet     │               │
+│   │  (v1.0.0)       │         │  (v1.1.0)       │               │
+│   └─────────────────┘         └─────────────────┘               │
+│                                                                  │
+│   [Promote 후]                                                   │
+│   Active Service ───────────────────► Green ReplicaSet          │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 배포 흐름
+
+1. **새 버전 배포**: 이미지 태그 변경 시 Argo Rollouts가 새 ReplicaSet(Green) 생성
+2. **Preview 테스트**: Preview Service를 통해 새 버전 검증
+3. **Promote**: 수동 승인 후 Active Service가 새 버전으로 전환
+4. **롤백 대비**: 이전 버전(Blue) 5분간 유지 (scaleDownDelaySeconds: 300)
+
+### 사용 명령어
+
+```bash
+# Rollout 상태 확인
+kubectl argo rollouts get rollout customers-service -n petclinic
+
+# 실시간 모니터링
+kubectl argo rollouts get rollout customers-service -n petclinic --watch
+
+# Promote (새 버전 승격)
+kubectl argo rollouts promote customers-service -n petclinic
+
+# 롤백 (이전 버전으로)
+kubectl argo rollouts undo customers-service -n petclinic
+
+# Dashboard 접속 (포트포워딩)
+kubectl argo rollouts dashboard
+```
+
+### 적용된 서비스
+
+| 서비스 | 배포 전략 | 리소스 타입 |
+|--------|----------|------------|
+| customers-service | Blue-Green | Rollout |
+| 기타 서비스 | Rolling Update | Deployment |
 
 ## ⚖️ AWS vs GCP 주요 차이점
 
@@ -187,6 +250,58 @@ AWS Provider 6.24.0부터 지원. 단일 NAT Gateway로 모든 AZ 커버.
 ### 🔒 GitHub Environment 설정
 
 Repository → Settings → Environments → `production` 생성 → Required reviewers 추가
+
+## 🔒 Terraform State Lock (DynamoDB)
+
+### State Lock 동작
+
+동시에 여러 Terraform 작업이 실행될 때 State 충돌을 방지합니다.
+
+```
+┌──────────────────┐     ┌──────────────────┐
+│  Workflow #1     │     │  Workflow #2     │
+│  (terraform apply)│     │  (terraform apply)│
+└────────┬─────────┘     └────────┬─────────┘
+         │                        │
+         ▼                        ▼
+    ┌─────────────────────────────────────┐
+    │         DynamoDB Lock Table          │
+    │    (petclinic-kr-tflock)            │
+    │                                      │
+    │  LockID: .../terraform.tfstate      │
+    │  Info: {"Operation":"OperationTyp...│
+    └─────────────────────────────────────┘
+         │                        │
+         ▼                        ▼
+    ✅ Lock 획득 성공          ❌ Lock 획득 실패
+    → Apply 진행               → "Error acquiring the state lock"
+```
+
+### Lock 충돌 해결
+
+```bash
+# Lock 정보 확인
+aws dynamodb scan --table-name petclinic-kr-tflock
+
+# 강제 Lock 해제 (주의: 진행 중인 작업이 없을 때만)
+terragrunt force-unlock <LOCK_ID>
+
+# 또는 DynamoDB에서 직접 삭제
+aws dynamodb delete-item \
+  --table-name petclinic-kr-tflock \
+  --key '{"LockID":{"S":"petclinic-kr-tfstate/compute/terraform.tfstate"}}'
+```
+
+### GitHub Actions 동시 실행 제어
+
+추가로 GitHub Actions의 `concurrency` 설정으로 같은 클라우드에 대한 동시 실행을 방지합니다.
+
+```yaml
+# terraform-apply.yml
+concurrency:
+  group: terraform-apply-${{ github.event.inputs.cloud }}
+  cancel-in-progress: false
+```
 
 ## 🧹 Pre-Cleanup (Destroy 전 정리)
 

@@ -107,6 +107,16 @@ curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 |
 echo "Helm 버전: $(helm version --short)"
 
 # ------------------------------------------------
+# Argo Rollouts kubectl 플러그인 설치
+# ------------------------------------------------
+echo "Argo Rollouts kubectl 플러그인 설치 중..."
+cd /tmp
+curl -LO https://github.com/argoproj/argo-rollouts/releases/latest/download/kubectl-argo-rollouts-linux-amd64
+chmod +x kubectl-argo-rollouts-linux-amd64
+sudo mv kubectl-argo-rollouts-linux-amd64 /usr/local/bin/kubectl-argo-rollouts
+echo "Argo Rollouts 플러그인 버전: $(kubectl-argo-rollouts version --short 2>/dev/null || echo 'installed')"
+
+# ------------------------------------------------
 # Java 설치
 # ------------------------------------------------
 echo "java 설치 중..."
